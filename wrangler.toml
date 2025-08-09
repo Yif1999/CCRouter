@@ -1,4 +1,4 @@
-name = "y-router"
+name = "ccrouter"
 main = "index.ts"
 compatibility_date = "2025-05-30"
 # routes = [
