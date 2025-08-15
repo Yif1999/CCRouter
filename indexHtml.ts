@@ -18,7 +18,7 @@ export const indexHtml = `<!DOCTYPE html>
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            background: linear-gradient(135deg, #2c2c2c 0%, #4a4a4a 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -33,7 +33,7 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .header {
-            background: linear-gradient(45deg, #1e3c72, #2a5298);
+            background: linear-gradient(45deg, #f97316, #ea580c);
             color: white;
             text-align: center;
             padding: 40px 20px;
@@ -57,13 +57,13 @@ export const indexHtml = `<!DOCTYPE html>
         .step {
             margin-bottom: 30px;
             padding: 20px;
-            border-left: 4px solid #2a5298;
+            border-left: 4px solid #f97316;
             background: #f8f9fa;
             border-radius: 0 8px 8px 0;
         }
 
         .step h2 {
-            color: #2c3e50;
+            color: #1f2937;
             margin-bottom: 15px;
             display: flex;
             align-items: center;
@@ -71,7 +71,7 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .step-number {
-            background: #2a5298;
+            background: #f97316;
             color: white;
             width: 28px;
             height: 28px;
@@ -85,8 +85,8 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .code-block {
-            background: #2c3e50;
-            color: #ecf0f1;
+            background: #1f2937;
+            color: #f3f4f6;
             padding: 15px;
             border-radius: 6px;
             font-family: 'Monaco', 'Menlo', monospace;
@@ -104,7 +104,7 @@ export const indexHtml = `<!DOCTYPE html>
             position: absolute;
             top: 10px;
             right: 10px;
-            background: #2a5298;
+            background: #f97316;
             color: white;
             border: none;
             padding: 6px 12px;
@@ -117,7 +117,7 @@ export const indexHtml = `<!DOCTYPE html>
 
         .copy-button:hover {
             opacity: 1;
-            background: #1e3c72;
+            background: #ea580c;
         }
 
         .copy-button.copied {
@@ -125,7 +125,7 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .success {
-            background: linear-gradient(45deg, #27ae60, #2ecc71);
+            background: linear-gradient(45deg, #f97316, #ea580c);
             color: white;
             padding: 25px;
             border-radius: 8px;
@@ -153,13 +153,13 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .footer-links a:hover {
-            color: #2a5298;
+            color: #f97316;
         }
 
         .note {
-            background: #e3f2fd;
-            border: 1px solid #bbdefb;
-            color: #1565c0;
+            background: #fef3e2;
+            border: 1px solid #fed7aa;
+            color: #f97316;
             padding: 12px;
             border-radius: 6px;
             margin: 10px 0;
