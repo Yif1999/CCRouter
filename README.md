@@ -1,4 +1,4 @@
-# y-router
+# CCRouter
 
 A Cloudflare Worker that translates between Anthropic's Claude API and OpenAI-compatible APIs, enabling you to use Claude Code with OpenRouter and other OpenAI-compatible providers.
 
@@ -47,7 +47,7 @@ source ~/.bashrc
 claude
 ```
 
-That's it! Claude Code will now use OpenRouter's models through y-router.
+That's it! Claude Code will now use OpenRouter's models through CCRouter.
 
 ### Multiple Configurations
 
@@ -78,7 +78,7 @@ Example workflows:
 
 ## What it does
 
-y-router acts as a translation layer that:
+CCRouter acts as a translation layer that:
 - Accepts requests in Anthropic's API format (`/v1/messages`)
 - Converts them to OpenAI's chat completions format
 - Forwards to OpenRouter (or any OpenAI-compatible API)
@@ -88,7 +88,7 @@ y-router acts as a translation layer that:
 ## Perfect for Claude Code + OpenRouter
 
 This allows you to use [Claude Code](https://claude.ai/code) with OpenRouter's vast selection of models by:
-1. Pointing Claude Code to your y-router deployment
+1. Pointing Claude Code to your CCRouter deployment
 2. Using your OpenRouter API key
 3. Accessing Claude models available on OpenRouter through Claude Code's interface
 
@@ -99,7 +99,7 @@ This allows you to use [Claude Code](https://claude.ai/code) with OpenRouter's v
 1. **Clone and start with Docker:**
    ```bash
    git clone <repo>
-   cd y-router
+   cd CCRouter
    docker-compose up -d
    ```
 
@@ -113,7 +113,7 @@ This allows you to use [Claude Code](https://claude.ai/code) with OpenRouter's v
 1. **Clone and deploy:**
    ```bash
    git clone <repo>
-   cd y-router
+   cd CCRouter
    npm install -g wrangler
    wrangler deploy
    ```
@@ -166,7 +166,7 @@ For easier deployment and development, you can use Docker:
 ```bash
 # Clone the repository
 git clone <repo>
-cd y-router
+cd CCRouter
 
 # Start with Docker Compose
 docker-compose up -d
@@ -178,12 +178,12 @@ docker-compose up -d
 
 ```bash
 # Build the Docker image
-docker build -t y-router .
+docker build -t CCRouter .
 
 # Run the container
 docker run -d -p 8787:8787 \
   -e OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 \
-  y-router
+  CCRouter
 ```
 
 #### Environment Configuration
@@ -219,7 +219,7 @@ docker-compose ps
 
 ## Thanks
 
-Special thanks to these projects that inspired y-router:
+Special thanks to these projects that inspired CCRouter:
 - [claude-code-router](https://github.com/musistudio/claude-code-router)
 - [claude-code-proxy](https://github.com/kiyo-e/claude-code-proxy)
 
@@ -227,11 +227,11 @@ Special thanks to these projects that inspired y-router:
 
 **Important Legal Notice:**
 
-- **Third-party Tool**: y-router is an independent, unofficial tool and is not affiliated with, endorsed by, or supported by Anthropic PBC, OpenAI, or OpenRouter
+- **Third-party Tool**: CCRouter is an independent, unofficial tool and is not affiliated with, endorsed by, or supported by Anthropic PBC, OpenAI, or OpenRouter
 - **Service Terms**: Users are responsible for ensuring compliance with the Terms of Service of all involved parties (Anthropic, OpenRouter, and any other API providers)
 - **API Key Responsibility**: Users must use their own valid API keys and are solely responsible for any usage, costs, or violations associated with those keys
 - **No Warranty**: This software is provided "as is" without any warranties. The authors are not responsible for any damages, service interruptions, or legal issues arising from its use
-- **Data Privacy**: While y-router does not intentionally store user data, users should review the privacy policies of all connected services
+- **Data Privacy**: While CCRouter does not intentionally store user data, users should review the privacy policies of all connected services
 - **Compliance**: Users are responsible for ensuring their use complies with applicable laws and regulations in their jurisdiction
 - **Commercial Use**: Any commercial use should be carefully evaluated against relevant terms of service and licensing requirements
 

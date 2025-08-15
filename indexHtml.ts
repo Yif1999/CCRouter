@@ -5,7 +5,7 @@ export const indexHtml = `<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Use Claude Code with OpenRouter</title>
+    <title>CCRouter - Claude Code with OpenRouter</title>
     <link rel="shortcut icon" type="image/svg+xml" href="${faviconDataUrl}">
     <style>
         * {
@@ -18,7 +18,7 @@ export const indexHtml = `<!DOCTYPE html>
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -33,7 +33,7 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .header {
-            background: linear-gradient(45deg, #2c3e50, #3498db);
+            background: linear-gradient(45deg, #1e3c72, #2a5298);
             color: white;
             text-align: center;
             padding: 40px 20px;
@@ -57,7 +57,7 @@ export const indexHtml = `<!DOCTYPE html>
         .step {
             margin-bottom: 30px;
             padding: 20px;
-            border-left: 4px solid #3498db;
+            border-left: 4px solid #2a5298;
             background: #f8f9fa;
             border-radius: 0 8px 8px 0;
         }
@@ -71,7 +71,7 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .step-number {
-            background: #3498db;
+            background: #2a5298;
             color: white;
             width: 28px;
             height: 28px;
@@ -104,7 +104,7 @@ export const indexHtml = `<!DOCTYPE html>
             position: absolute;
             top: 10px;
             right: 10px;
-            background: #3498db;
+            background: #2a5298;
             color: white;
             border: none;
             padding: 6px 12px;
@@ -117,7 +117,7 @@ export const indexHtml = `<!DOCTYPE html>
 
         .copy-button:hover {
             opacity: 1;
-            background: #2980b9;
+            background: #1e3c72;
         }
 
         .copy-button.copied {
@@ -153,7 +153,7 @@ export const indexHtml = `<!DOCTYPE html>
         }
 
         .footer-links a:hover {
-            color: #3498db;
+            color: #2a5298;
         }
 
         .note {
@@ -170,16 +170,16 @@ export const indexHtml = `<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Claude Code + OpenRouter</h1>
-            <p>One-line install or 3 steps to get started</p>
+            <h1>🔗 CCRouter</h1>
+            <p>Connect Claude Code with OpenRouter and beyond</p>
         </div>
 
         <div class="content">
             <div class="step">
                 <h2><span class="step-number">⚡</span>One-line Install (Recommended)</h2>
                 <div class="code-block-wrapper">
-                    <div class="code-block">bash -c "$(curl -fsSL https://cc.yovy.app/install.sh)"</div>
-                    <button class="copy-button" onclick="copyToClipboard(this, 'bash -c &quot;$(curl -fsSL https://cc.yovy.app/install.sh)&quot;')">Copy</button>
+                    <div class="code-block">bash -c "$(curl -fsSL https://ccrouter.yiguanyaoyaofen.workers.dev/install.sh)"</div>
+                    <button class="copy-button" onclick="copyToClipboard(this, 'bash -c &quot;$(curl -fsSL https://ccrouter.yiguanyaoyaofen.workers.dev/install.sh)&quot;')">Copy</button>
                 </div>
                 <div class="note">This script will automatically install Node.js, Claude Code, and configure your environment with OpenRouter or Moonshot</div>
             </div>
@@ -202,9 +202,9 @@ export const indexHtml = `<!DOCTYPE html>
                 <h2><span class="step-number">3</span>Manual: Configure</h2>
                 <p>Add these to your shell config (<code>~/.bashrc</code> or <code>~/.zshrc</code>):</p>
                 <div class="code-block-wrapper">
-                    <div class="code-block">export ANTHROPIC_BASE_URL="https://cc.yovy.app"<br>
+                    <div class="code-block">export ANTHROPIC_BASE_URL="https://ccrouter.yiguanyaoyaofen.workers.dev"<br>
 export ANTHROPIC_API_KEY="your-openrouter-api-key"</div>
-                    <button class="copy-button" onclick="copyToClipboard(this, 'export ANTHROPIC_BASE_URL=&quot;https://cc.yovy.app&quot;\\nexport ANTHROPIC_API_KEY=&quot;your-openrouter-api-key&quot;')">Copy</button>
+                    <button class="copy-button" onclick="copyToClipboard(this, 'export ANTHROPIC_BASE_URL=&quot;https://ccrouter.yiguanyaoyaofen.workers.dev&quot;\\nexport ANTHROPIC_API_KEY=&quot;your-openrouter-api-key&quot;')">Copy</button>
                 </div>
                 <p><strong>Optional:</strong> Configure specific models (browse at <a href="https://openrouter.ai/models" target="_blank">openrouter.ai/models</a>):</p>
                 <div class="code-block-wrapper">
@@ -225,15 +225,15 @@ export ANTHROPIC_SMALL_FAST_MODEL="google/gemini-2.5-flash"</div>
             </div>
 
             <div class="note">
-                <p><strong>For data privacy:</strong> Consider <a href="https://github.com/luohy15/y-router?tab=readme-ov-file#setup" target="_blank">self-deploying y-router</a> to Cloudflare Workers instead of using this shared instance.</p>
+                <p><strong>For data privacy:</strong> Consider self-deploying CCRouter to Cloudflare Workers instead of using this shared instance.</p>
             </div>
         </div>
 
         <div class="footer-links">
-            <a href="https://github.com/luohy15/y-router" target="_blank">y-router</a>
+            <a href="https://github.com/Yif1999/CCRouter" target="_blank">CCRouter</a>
             <a href="https://openrouter.ai" target="_blank">OpenRouter</a>
             <a href="https://claude.ai/code" target="_blank">Claude Code</a>
-            <a href="https://yovy.app" target="_blank">Yovy Chat</a>
+            <a href="https://github.com/Yif1999/CCRouter" target="_blank">GitHub</a>
             <br>
             <a href="/terms">Terms</a>
             <a href="/privacy">Privacy</a>
