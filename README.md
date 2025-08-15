@@ -8,7 +8,7 @@ A Cloudflare Worker that translates between Anthropic's Claude API and OpenAI-co
 
 ### One-line Install (Recommended)
 ```bash
-bash -c "$(curl -fsSL https://cc.yovy.app/install.sh)"
+bash -c "$(curl -fsSL https://ccrouter.yiguanyaoyaofen.workers.dev/install.sh)"
 ```
 
 This script will automatically:
@@ -30,7 +30,7 @@ npm install -g @anthropic-ai/claude-code
 
 ```bash
 # For quick testing, you can use our shared instance. For daily use, deploy your own instance for better reliability.
-export ANTHROPIC_BASE_URL="https://cc.yovy.app"
+export ANTHROPIC_BASE_URL="https://ccrouter.yiguanyaoyaofen.workers.dev"
 export ANTHROPIC_API_KEY="your-openrouter-api-key"
 export ANTHROPIC_CUSTOM_HEADERS="x-api-key: $ANTHROPIC_API_KEY"
 ```
@@ -55,7 +55,7 @@ To maintain multiple Claude Code configurations for different providers or model
 
 ```bash
 # Example aliases for different configurations
-alias c1='ANTHROPIC_BASE_URL="https://cc.yovy.app" ANTHROPIC_API_KEY="your-openrouter-key" ANTHROPIC_CUSTOM_HEADERS="x-api-key: $ANTHROPIC_API_KEY" ANTHROPIC_MODEL="moonshotai/kimi-k2" ANTHROPIC_SMALL_FAST_MODEL="google/gemini-2.5-flash" claude'
+alias c1='ANTHROPIC_BASE_URL="https://ccrouter.yiguanyaoyaofen.workers.dev" ANTHROPIC_API_KEY="your-openrouter-key" ANTHROPIC_CUSTOM_HEADERS="x-api-key: $ANTHROPIC_API_KEY" ANTHROPIC_MODEL="moonshotai/kimi-k2" ANTHROPIC_SMALL_FAST_MODEL="google/gemini-2.5-flash" claude'
 alias c2='ANTHROPIC_BASE_URL="https://api.moonshot.ai/anthropic/" ANTHROPIC_API_KEY="your-moonshot-key" ANTHROPIC_CUSTOM_HEADERS="x-api-key: $ANTHROPIC_API_KEY" ANTHROPIC_MODEL="kimi-k2-0711-preview" ANTHROPIC_SMALL_FAST_MODEL="moonshot-v1-8k" claude'
 ```
 
@@ -70,7 +70,7 @@ env:
   ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
 ```
 
-Set `ANTHROPIC_BASE_URL` to `https://cc.yovy.app` in your repository secrets.
+Set `ANTHROPIC_BASE_URL` to `https://ccrouter.yiguanyaoyaofen.workers.dev` in your repository secrets.
 
 Example workflows:
 - [Interactive Claude Code](.github/workflows/claude.yml) - Responds to @claude mentions
@@ -138,7 +138,7 @@ This allows you to use [Claude Code](https://claude.ai/code) with OpenRouter's v
 Send requests to `/v1/messages` using Anthropic's format:
 
 ```bash
-curl -X POST https://cc.yovy.app/v1/messages \
+curl -X POST https://ccrouter.yiguanyaoyaofen.workers.dev/v1/messages \
   -H "Content-Type: application/json" \
   -H "x-api-key: your-openrouter-key" \
   -d '{

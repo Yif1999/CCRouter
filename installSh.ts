@@ -80,7 +80,7 @@ echo ""
 case "$provider_choice" in
     1)
         provider="openrouter"
-        default_base_url="https://cc.yovy.app"
+        default_base_url="https://ccrouter.yiguanyaoyaofen.workers.dev"
         api_key_url="https://openrouter.ai/keys"
         default_model_main="anthropic/claude-sonnet-4"
         default_model_small="anthropic/claude-3.5-haiku"
@@ -207,6 +207,6 @@ echo "🚀 Then you can start using Claude Code with:"
 echo "   claude"
 echo ""
 echo "💡 Tip: To maintain multiple configurations, use shell aliases:"
-echo "   alias c1='ANTHROPIC_BASE_URL=\\"https://cc.yovy.app\\" ANTHROPIC_API_KEY=\\"key1\\" ANTHROPIC_MODEL=\\"moonshotai/kimi-k2\\" ANTHROPIC_SMALL_FAST_MODEL=\\"google/gemini-2.5-flash\\" claude'"
+echo "   alias c1='ANTHROPIC_BASE_URL=\\"https://ccrouter.yiguanyaoyaofen.workers.dev\\" ANTHROPIC_API_KEY=\\"key1\\" ANTHROPIC_MODEL=\\"moonshotai/kimi-k2\\" ANTHROPIC_SMALL_FAST_MODEL=\\"google/gemini-2.5-flash\\" claude'"
 echo "   alias c2='ANTHROPIC_BASE_URL=\\"https://api.moonshot.ai/anthropic/\\" ANTHROPIC_API_KEY=\\"key2\\" ANTHROPIC_MODEL=\\"kimi-k2-0711-preview\\" ANTHROPIC_SMALL_FAST_MODEL=\\"moonshot-v1-8k\\" claude'"
 `;

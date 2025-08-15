@@ -2,7 +2,7 @@ name = "ccrouter"
 main = "index.ts"
 compatibility_date = "2025-05-30"
 # routes = [
-#   { pattern = "cc.yovy.app", custom_domain = true }
+#   { pattern = "ccrouter.yiguanyaoyaofen.workers.dev", custom_domain = true }
 # ]
 
 # Enable logging
