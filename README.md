@@ -2,7 +2,18 @@
 
 A Cloudflare Worker that translates between Anthropic's Claude API and OpenAI-compatible APIs, enabling you to use Claude Code with OpenRouter and other OpenAI-compatible providers.
 
-> **Note:** This worker is suitable for testing models other than Anthropic. For Anthropic models (especially for intensive usage exceeding $200), consider using [claude-relay-service](https://github.com/Wei-Shaw/claude-relay-service) for better value.
+## ✨ Key Enhancements (This Fork)
+
+This fork adds several important improvements over the original:
+
+- **🔧 Accurate Cache Billing**: Reverse-engineers cache creation tokens from actual OpenRouter costs for precise billing
+- **📊 Enhanced Usage Tracking**: Properly calculates and reports cache read/write tokens to match Anthropic's format
+- **⚡ Maximized Cache Utilization**: Optimizes caching strategy to significantly reduce API costs
+- **🛠️ Better Tool Call Handling**: Improved validation and conversion of tool calls between formats
+- **🎯 Model Mapping**: Intelligent model name translation between Anthropic and OpenRouter formats
+- **💰 Cost Transparency**: Real-time cost calculation based on OpenRouter's actual billing
+
+> **Note:** For Anthropic models with heavy usage (>$200), consider using [claude-relay-service](https://github.com/Wei-Shaw/claude-relay-service) for better value.
 
 ## Quick Usage
 
@@ -76,145 +87,36 @@ Example workflows:
 - [Interactive Claude Code](.github/workflows/claude.yml) - Responds to @claude mentions
 - [Automated Code Review](.github/workflows/claude-code-review.yml) - Automatic PR reviews
 
-## What it does
+## How It Works
 
 CCRouter acts as a translation layer that:
 - Accepts requests in Anthropic's API format (`/v1/messages`)
-- Converts them to OpenAI's chat completions format
-- Forwards to OpenRouter (or any OpenAI-compatible API)
-- Translates the response back to Anthropic's format
-- Supports both streaming and non-streaming responses
+- Converts to OpenAI chat completions format with intelligent model mapping
+- **Preserves cache_control metadata** for proper caching behavior
+- Forwards to OpenRouter with usage tracking enabled
+- **Reverse-engineers cache creation tokens** from actual billing costs
+- Translates responses back to Anthropic format with accurate usage metrics
 
-## Perfect for Claude Code + OpenRouter
+## Deployment
 
-This allows you to use [Claude Code](https://claude.ai/code) with OpenRouter's vast selection of models by:
-1. Pointing Claude Code to your CCRouter deployment
-2. Using your OpenRouter API key
-3. Accessing Claude models available on OpenRouter through Claude Code's interface
-
-## Setup
-
-### Option 1: Docker Deployment (Recommended for Local)
-
-1. **Clone and start with Docker:**
-   ```bash
-   git clone <repo>
-   cd CCRouter
-   docker-compose up -d
-   ```
-
-2. **Configure Claude Code:**
-   - Set API endpoint to `http://localhost:8787`
-   - Use your OpenRouter API key
-   - Enjoy access to Claude models via OpenRouter!
-
-### Option 2: Cloudflare Workers Deployment
-
-1. **Clone and deploy:**
-   ```bash
-   git clone <repo>
-   cd CCRouter
-   npm install -g wrangler
-   wrangler deploy
-   ```
-
-2. **Set environment variables:**
-   ```bash
-   # Optional: defaults to https://openrouter.ai/api/v1
-   wrangler secret put OPENROUTER_BASE_URL
-   ```
-
-3. **Configure Claude Code:**
-   - Set API endpoint to your deployed Worker URL
-   - Use your OpenRouter API key
-   - Enjoy access to Claude models via OpenRouter!
-
-## Environment Variables
-
-- `OPENROUTER_BASE_URL` (optional): Base URL for the target API. Defaults to `https://openrouter.ai/api/v1`
-
-## API Usage
-
-Send requests to `/v1/messages` using Anthropic's format:
-
+### Docker
 ```bash
-curl -X POST https://ccrouter.yiguanyaoyaofen.workers.dev/v1/messages \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-openrouter-key" \
-  -d '{
-    "model": "claude-sonnet-4-20250514",
-    "messages": [{"role": "user", "content": "Hello, Claude"}],
-    "max_tokens": 100
-  }'
+git clone <repo>
+cd CCRouter
+docker-compose up -d
+```
+Service available at `http://localhost:8787`
+
+### Cloudflare Workers
+```bash
+npm install -g wrangler
+wrangler deploy
 ```
 
 ## Development
-
-### Local Development (Wrangler)
-
 ```bash
-npm run dev    # Start development server
-npm run deploy # Deploy to Cloudflare Workers
-```
-
-### Docker Deployment
-
-For easier deployment and development, you can use Docker:
-
-#### Quick Start with Docker Compose
-
-```bash
-# Clone the repository
-git clone <repo>
-cd CCRouter
-
-# Start with Docker Compose
-docker-compose up -d
-
-# The service will be available at http://localhost:8787
-```
-
-#### Manual Docker Build
-
-```bash
-# Build the Docker image
-docker build -t CCRouter .
-
-# Run the container
-docker run -d -p 8787:8787 \
-  -e OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 \
-  CCRouter
-```
-
-#### Environment Configuration
-
-Create a `.env` file or set environment variables:
-
-```bash
-# Optional: Base URL for the target API (defaults to https://openrouter.ai/api/v1)
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-```
-
-#### Docker Compose Commands
-
-```bash
-docker-compose up -d        # Start services in background
-docker-compose down         # Stop and remove containers
-docker-compose logs         # View logs
-docker-compose ps           # Check service status
-docker-compose restart      # Restart services
-```
-
-#### Health Check
-
-The Docker setup includes a health check that verifies the service is responding:
-
-```bash
-# Check if the service is healthy
-curl http://localhost:8787/
-
-# Check Docker health status
-docker-compose ps
+npm run dev    # Local development
+npm run deploy # Deploy to Workers
 ```
 
 ## Thanks

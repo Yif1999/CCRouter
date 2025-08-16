@@ -1,6 +1,6 @@
-import { calculateCacheCreationTokens, getCachedModelPricing } from './pricingUtils';
+import { calculateCacheCreationTokens, getCachedModelPricing, getModelPricing } from './pricingUtils';
 
-function calculateUsageWithCacheCreation(usage: any, model: string) {
+async function calculateUsageWithCacheCreation(usage: any, model: string) {
   const inputTokens = usage?.prompt_tokens || 0;
   const outputTokens = usage?.completion_tokens || 0;
   const cacheReadTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
@@ -20,8 +20,21 @@ function calculateUsageWithCacheCreation(usage: any, model: string) {
   
   // If we have actual cost information, try to calculate cache creation tokens
   if (actualCost && actualCost > 0) {
-    const pricing = getCachedModelPricing(model);
+    let pricing = getCachedModelPricing(model);
+    debugInfo.pricingFromCache = !!pricing;
+    
+    // If no cached pricing, fetch it now
+    if (!pricing) {
+      try {
+        pricing = await getModelPricing(model);
+        debugInfo.pricingFromCache = false;
+      } catch (error) {
+        console.error('Failed to fetch pricing for model:', model, error);
+      }
+    }
+    
     debugInfo.pricing = pricing;
+    
     if (pricing) {
       cacheCreationTokens = calculateCacheCreationTokens(
         actualCost,
@@ -45,7 +58,7 @@ function calculateUsageWithCacheCreation(usage: any, model: string) {
   };
 }
 
-export function formatOpenAIToAnthropic(completion: any, model: string): any {
+export async function formatOpenAIToAnthropic(completion: any, model: string): Promise<any> {
   const messageId = "msg_" + Date.now();
 
   let content: any = [];
@@ -107,7 +120,7 @@ export function formatOpenAIToAnthropic(completion: any, model: string): any {
     stop_reason: completion.choices[0].finish_reason === 'tool_calls' ? "tool_use" : "end_turn",
     stop_sequence: null,
     model,
-    usage: calculateUsageWithCacheCreation(
+    usage: await calculateUsageWithCacheCreation(
       completion.usage,
       model
     )

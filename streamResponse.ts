@@ -1,6 +1,6 @@
-import { calculateCacheCreationTokens, getCachedModelPricing } from './pricingUtils';
+import { calculateCacheCreationTokens, getCachedModelPricing, getModelPricing } from './pricingUtils';
 
-function calculateStreamUsage(
+async function calculateStreamUsage(
   totalInputTokens: number,
   totalOutputTokens: number,
   totalCacheReadTokens: number,
@@ -10,7 +10,17 @@ function calculateStreamUsage(
   let cacheCreationTokens = 0;
 
   if (actualCost && actualCost > 0) {
-    const pricing = getCachedModelPricing(model);
+    let pricing = getCachedModelPricing(model);
+    
+    // If no cached pricing, fetch it now
+    if (!pricing) {
+      try {
+        pricing = await getModelPricing(model);
+      } catch (error) {
+        console.error('Failed to fetch pricing for model:', model, error);
+      }
+    }
+    
     if (pricing) {
       cacheCreationTokens = calculateCacheCreationTokens(
         actualCost,
@@ -284,7 +294,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
           stop_reason: isToolUse ? "tool_use" : "end_turn",
           stop_sequence: null,
         },
-        usage: calculateStreamUsage(
+        usage: await calculateStreamUsage(
           totalInputTokens,
           totalOutputTokens,
           totalCacheReadTokens,

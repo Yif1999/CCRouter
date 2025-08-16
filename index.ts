@@ -70,19 +70,22 @@ export default {
         });
       } else {
         const openaiData = await openaiResponse.json();
-        const anthropicResponse = formatOpenAIToAnthropic(openaiData, openaiRequest.model);
+        const anthropicResponse = await formatOpenAIToAnthropic(openaiData, openaiRequest.model);
         
         // Add debug headers
         const debugInfo = (globalThis as any).debugInfo;
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (debugInfo) {
-          headers["X-Debug-ActualCost"] = String(debugInfo.actualCost || 'undefined');
-          headers["X-Debug-InputTokens"] = String(debugInfo.inputTokens);
-          headers["X-Debug-CacheRead"] = String(debugInfo.cacheReadTokens);
-          headers["X-Debug-Model"] = debugInfo.model;
-          headers["X-Debug-CacheCreation"] = String(debugInfo.cacheCreationTokens || 0);
+          headers["X-CCRouter-Actual-Cost"] = String(debugInfo.actualCost || 'undefined');
+          headers["X-CCRouter-Input-Tokens"] = String(debugInfo.inputTokens);
+          headers["X-CCRouter-Cache-Read"] = String(debugInfo.cacheReadTokens);
+          headers["X-CCRouter-Model"] = debugInfo.model;
+          headers["X-CCRouter-Cache-Creation"] = String(debugInfo.cacheCreationTokens || 0);
+          headers["X-CCRouter-Pricing-Cached"] = String(debugInfo.pricingFromCache || false);
           if (debugInfo.pricing) {
-            headers["X-Debug-CacheWritePrice"] = String(debugInfo.pricing.input_cache_write || 'undefined');
+            headers["X-CCRouter-Cache-Write-Price"] = String(debugInfo.pricing.input_cache_write || 'undefined');
+          } else {
+            headers["X-CCRouter-Cache-Write-Price"] = 'no-pricing';
           }
         }
         
