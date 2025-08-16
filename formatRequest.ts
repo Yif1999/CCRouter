@@ -136,14 +136,22 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             role: "assistant",
             content: null,
           };
-          let textContent = "";
+          const contentBlocks: any[] = [];
           const toolCalls: any[] = [];
 
           anthropicMessage.content.forEach((contentPart) => {
             if (contentPart.type === "text") {
-              textContent += (typeof contentPart.text === "string"
-                ? contentPart.text
-                : JSON.stringify(contentPart.text)) + "\n";
+              const textBlock: any = {
+                type: "text",
+                text: typeof contentPart.text === "string"
+                  ? contentPart.text
+                  : JSON.stringify(contentPart.text)
+              };
+              // Preserve cache_control if present
+              if (contentPart.cache_control) {
+                textBlock.cache_control = contentPart.cache_control;
+              }
+              contentBlocks.push(textBlock);
             } else if (contentPart.type === "tool_use") {
               toolCalls.push({
                 id: contentPart.id,
@@ -156,10 +164,14 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             }
           });
 
-          const trimmedTextContent = textContent.trim();
-          if (trimmedTextContent.length > 0) {
-            assistantMessage.content = trimmedTextContent;
+          // Use content blocks format if we have cache_control, otherwise use string
+          if (contentBlocks.some(block => block.cache_control)) {
+            assistantMessage.content = contentBlocks;
+          } else if (contentBlocks.length > 0) {
+            // Convert to string for backward compatibility when no cache_control
+            assistantMessage.content = contentBlocks.map(block => block.text).join("\n").trim();
           }
+          
           if (toolCalls.length > 0) {
             assistantMessage.tool_calls = toolCalls;
           }
@@ -167,14 +179,22 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             openAiMessagesFromThisAnthropicMessage.push(assistantMessage);
           }
         } else if (anthropicMessage.role === "user") {
-          let userTextMessageContent = "";
+          const contentBlocks: any[] = [];
           const subsequentToolMessages: any[] = [];
 
           anthropicMessage.content.forEach((contentPart) => {
             if (contentPart.type === "text") {
-              userTextMessageContent += (typeof contentPart.text === "string"
-                ? contentPart.text
-                : JSON.stringify(contentPart.text)) + "\n";
+              const textBlock: any = {
+                type: "text",
+                text: typeof contentPart.text === "string"
+                  ? contentPart.text
+                  : JSON.stringify(contentPart.text)
+              };
+              // Preserve cache_control if present
+              if (contentPart.cache_control) {
+                textBlock.cache_control = contentPart.cache_control;
+              }
+              contentBlocks.push(textBlock);
             } else if (contentPart.type === "tool_result") {
               subsequentToolMessages.push({
                 role: "tool",
@@ -186,12 +206,21 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             }
           });
 
-          const trimmedUserText = userTextMessageContent.trim();
-          if (trimmedUserText.length > 0) {
-            openAiMessagesFromThisAnthropicMessage.push({
+          if (contentBlocks.length > 0) {
+            const userMessage: any = {
               role: "user",
-              content: trimmedUserText,
-            });
+              content: null
+            };
+            
+            // Use content blocks format if we have cache_control, otherwise use string
+            if (contentBlocks.some(block => block.cache_control)) {
+              userMessage.content = contentBlocks;
+            } else {
+              // Convert to string for backward compatibility when no cache_control
+              userMessage.content = contentBlocks.map(block => block.text).join("\n").trim();
+            }
+            
+            openAiMessagesFromThisAnthropicMessage.push(userMessage);
           }
           openAiMessagesFromThisAnthropicMessage.push(...subsequentToolMessages);
         }
