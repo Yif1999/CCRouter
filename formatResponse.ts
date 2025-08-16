@@ -34,17 +34,34 @@ export function formatOpenAIToAnthropic(completion: any, model: string): any {
   const messageId = "msg_" + Date.now();
 
   let content: any = [];
+  
+  // Add text content if present
   if (completion.choices[0].message.content) {
-    content = [{ text: completion.choices[0].message.content, type: "text" }];
-  } else if (completion.choices[0].message.tool_calls) {
-    content = completion.choices[0].message.tool_calls.map((item: any) => {
+    content.push({ 
+      type: "text", 
+      text: completion.choices[0].message.content 
+    });
+  }
+  
+  // Add tool calls if present (can coexist with text content)
+  if (completion.choices[0].message.tool_calls) {
+    const toolUses = completion.choices[0].message.tool_calls.map((item: any) => {
+      let parsedInput = {};
+      try {
+        parsedInput = item.function?.arguments ? JSON.parse(item.function.arguments) : {};
+      } catch (e) {
+        console.warn('Failed to parse tool call arguments:', item.function?.arguments);
+        parsedInput = {};
+      }
+      
       return {
         type: 'tool_use',
         id: item.id,
         name: item.function?.name,
-        input: item.function?.arguments ? JSON.parse(item.function.arguments) : {},
+        input: parsedInput,
       };
     });
+    content.push(...toolUses);
   }
 
   const result = {
