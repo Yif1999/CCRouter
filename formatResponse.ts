@@ -23,7 +23,7 @@ function calculateUsageWithCacheCreation(usage: any, model: string) {
   }
   
   return {
-    input_tokens: inputTokens,
+    input_tokens: inputTokens - cacheReadTokens, // Exclude cache read tokens from input
     output_tokens: outputTokens,
     cache_creation_input_tokens: cacheCreationTokens,
     cache_read_input_tokens: cacheReadTokens

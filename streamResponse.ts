@@ -23,7 +23,7 @@ function calculateStreamUsage(
   }
 
   return {
-    input_tokens: totalInputTokens,
+    input_tokens: totalInputTokens - totalCacheReadTokens, // Exclude cache read tokens from input
     output_tokens: totalOutputTokens,
     cache_creation_input_tokens: cacheCreationTokens,
     cache_read_input_tokens: totalCacheReadTokens
