@@ -6,6 +6,10 @@ import { indexHtml } from './indexHtml';
 import { termsHtml } from './termsHtml';
 import { privacyHtml } from './privacyHtml';
 import { installSh } from './installSh';
+import { prefetchModelPricing } from './pricingUtils';
+
+// Prefetch model pricing on startup
+prefetchModelPricing().catch(console.error);
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

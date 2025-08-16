@@ -1,3 +1,35 @@
+import { calculateCacheCreationTokens, getCachedModelPricing } from './pricingUtils';
+
+function calculateStreamUsage(
+  totalInputTokens: number,
+  totalOutputTokens: number,
+  totalCacheReadTokens: number,
+  actualCost: number | null,
+  model: string
+) {
+  let cacheCreationTokens = 0;
+  
+  if (actualCost && actualCost > 0) {
+    const pricing = getCachedModelPricing(model);
+    if (pricing) {
+      cacheCreationTokens = calculateCacheCreationTokens(
+        actualCost,
+        totalInputTokens,
+        totalOutputTokens,
+        totalCacheReadTokens,
+        pricing
+      );
+    }
+  }
+  
+  return {
+    input_tokens: totalInputTokens,
+    output_tokens: totalOutputTokens,
+    cache_creation_input_tokens: cacheCreationTokens,
+    cache_read_input_tokens: totalCacheReadTokens
+  };
+}
+
 export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: string): ReadableStream {
   const messageId = "msg_" + Date.now();
   
@@ -8,8 +40,8 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
   
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
-  let totalCacheCreationTokens = 0;
   let totalCacheReadTokens = 0;
+  let actualCost: number | null = null;
   
   return new ReadableStream({
     async start(controller) {
@@ -61,9 +93,8 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
                     if (parsed.usage) {
                       totalInputTokens = parsed.usage.prompt_tokens || totalInputTokens;
                       totalOutputTokens = parsed.usage.completion_tokens || totalOutputTokens;
-                      // OpenRouter doesn't provide cache info, so these remain 0
-                      totalCacheCreationTokens = parsed.usage.cache_creation_input_tokens || totalCacheCreationTokens;
-                      totalCacheReadTokens = parsed.usage.cache_read_input_tokens || totalCacheReadTokens;
+                      totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens || totalCacheReadTokens;
+                      if (parsed.usage.cost !== undefined) actualCost = parsed.usage.cost;
                     }
                   } catch (e) {
                     // Parse error
@@ -97,9 +128,8 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
                 if (parsed.usage) {
                   totalInputTokens = parsed.usage.prompt_tokens || totalInputTokens;
                   totalOutputTokens = parsed.usage.completion_tokens || totalOutputTokens;
-                  // OpenRouter doesn't provide cache info, so these remain 0
-                  totalCacheCreationTokens = parsed.usage.cache_creation_input_tokens || totalCacheCreationTokens;
-                  totalCacheReadTokens = parsed.usage.cache_read_input_tokens || totalCacheReadTokens;
+                  totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens || totalCacheReadTokens;
+                  if (parsed.usage.cost !== undefined) actualCost = parsed.usage.cost;
                 }
                 
                 if (!delta) continue;
@@ -214,12 +244,13 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
           stop_reason: isToolUse ? "tool_use" : "end_turn",
           stop_sequence: null,
         },
-        usage: { 
-          input_tokens: totalInputTokens, 
-          output_tokens: totalOutputTokens,
-          cache_creation_input_tokens: totalCacheCreationTokens,
-          cache_read_input_tokens: totalCacheReadTokens
-        },
+        usage: calculateStreamUsage(
+          totalInputTokens,
+          totalOutputTokens,
+          totalCacheReadTokens,
+          actualCost,
+          model
+        ),
       });
 
       enqueueSSE(controller, "message_stop", {

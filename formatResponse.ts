@@ -1,3 +1,35 @@
+import { calculateCacheCreationTokens, getCachedModelPricing } from './pricingUtils';
+
+function calculateUsageWithCacheCreation(usage: any, model: string) {
+  const inputTokens = usage?.prompt_tokens || 0;
+  const outputTokens = usage?.completion_tokens || 0;
+  const cacheReadTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
+  const actualCost = usage?.cost;
+  
+  let cacheCreationTokens = 0;
+  
+  // If we have actual cost information, try to calculate cache creation tokens
+  if (actualCost && actualCost > 0) {
+    const pricing = getCachedModelPricing(model);
+    if (pricing) {
+      cacheCreationTokens = calculateCacheCreationTokens(
+        actualCost,
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        pricing
+      );
+    }
+  }
+  
+  return {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cache_creation_input_tokens: cacheCreationTokens,
+    cache_read_input_tokens: cacheReadTokens
+  };
+}
+
 export function formatOpenAIToAnthropic(completion: any, model: string): any {
   const messageId = "msg_" + Date.now();
 
@@ -23,12 +55,10 @@ export function formatOpenAIToAnthropic(completion: any, model: string): any {
     stop_reason: completion.choices[0].finish_reason === 'tool_calls' ? "tool_use" : "end_turn",
     stop_sequence: null,
     model,
-    usage: {
-      input_tokens: completion.usage?.prompt_tokens || 0,
-      output_tokens: completion.usage?.completion_tokens || 0,
-      cache_creation_input_tokens: completion.usage?.cache_creation_input_tokens || 0,
-      cache_read_input_tokens: completion.usage?.cache_read_input_tokens || 0
-    }
+    usage: calculateUsageWithCacheCreation(
+      completion.usage,
+      model
+    )
   };
   return result;
 }
