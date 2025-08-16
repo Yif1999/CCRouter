@@ -8,9 +8,20 @@ function calculateUsageWithCacheCreation(usage: any, model: string) {
   
   let cacheCreationTokens = 0;
   
+  // Debug info - will be exposed via response headers
+  const debugInfo: any = {
+    actualCost,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    model,
+    usageRaw: JSON.stringify(usage)
+  };
+  
   // If we have actual cost information, try to calculate cache creation tokens
   if (actualCost && actualCost > 0) {
     const pricing = getCachedModelPricing(model);
+    debugInfo.pricing = pricing;
     if (pricing) {
       cacheCreationTokens = calculateCacheCreationTokens(
         actualCost,
@@ -19,8 +30,12 @@ function calculateUsageWithCacheCreation(usage: any, model: string) {
         cacheReadTokens,
         pricing
       );
+      debugInfo.cacheCreationTokens = cacheCreationTokens;
     }
   }
+  
+  // Store debug info globally for access in response
+  (globalThis as any).debugInfo = debugInfo;
   
   return {
     input_tokens: inputTokens - cacheReadTokens, // Exclude cache read tokens from input
