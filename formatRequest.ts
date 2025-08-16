@@ -157,6 +157,30 @@ export function mapModel(anthropicModel: string): string {
 export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
   const { model, messages, system = [], temperature, tools, stream, thinking } = body;
 
+  let cacheControlBlocksCount = 0;
+  const MAX_CACHE_CONTROL_BLOCKS = 4;
+
+  const addCacheControl = (block: any, condition: boolean = true) => {
+    if (cacheControlBlocksCount < MAX_CACHE_CONTROL_BLOCKS && condition) {
+      if (model.includes('claude')) {
+        block.cache_control = { "type": "ephemeral" };
+        cacheControlBlocksCount++;
+      }
+    }
+    return block;
+  };
+
+  const processContentPart = (block: any) => {
+    if (block.cache_control) {
+      if (cacheControlBlocksCount < MAX_CACHE_CONTROL_BLOCKS) {
+        cacheControlBlocksCount++;
+      } else {
+        delete block.cache_control;
+      }
+    }
+    return block;
+  };
+
   const openAIMessages = Array.isArray(messages)
     ? messages.flatMap((anthropicMessage) => {
         const openAiMessagesFromThisAnthropicMessage: any[] = [];
@@ -187,31 +211,27 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   ? contentPart.text
                   : JSON.stringify(contentPart.text)
               };
-              // Preserve cache_control if present, or force caching
-              if (contentPart.cache_control) {
-                textBlock.cache_control = contentPart.cache_control;
-              } else if (model.includes('claude')) {
-                const textContent = textBlock.text;
-                if (textContent.length > 1000) {
-                  textBlock.cache_control = {
-                    "type": "ephemeral"
-                  };
-                }
+              const textBlock = processContentPart({
+                type: "text",
+                text: typeof contentPart.text === "string"
+                  ? contentPart.text
+                  : JSON.stringify(contentPart.text)
+              });
+              if (!textBlock.cache_control) {
+                addCacheControl(textBlock, textBlock.text.length > 1000);
               }
               contentBlocks.push(textBlock);
             } else if (contentPart.type === "image") {
-              const imageBlock: any = {
+              const imageBlock = processContentPart({
                 type: "image_url",
                 image_url: {
                   url: contentPart.source?.type === "base64"
                   ? `data:${contentPart.source.media_type};base64,${contentPart.source.data}`
                   : contentPart.source?.data || contentPart.source?.url
                 }
-              };
-              if (contentPart.cache_control) {
-                imageBlock.cache_control = contentPart.cache_control;
-              } else if (model.includes('claude')) {
-                imageBlock.cache_control = {"type": "ephemeral"};
+              });
+              if (!imageBlock.cache_control) {
+                addCacheControl(imageBlock);
               }
               contentBlocks.push(imageBlock);
             } else if (contentPart.type === "tool_use") {
@@ -252,29 +272,27 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   ? contentPart.text
                   : JSON.stringify(contentPart.text)
               };
-              // Preserve cache_control if present, or force caching
-              if (contentPart.cache_control) {
-                textBlock.cache_control = contentPart.cache_control;
-              } else if (model.includes('claude')) {
-                const textContent = textBlock.text;
-                if (textContent.length > 1000 || isLikelyFileContent(textBlock)) {
-                  textBlock.cache_control = {
-                    "type": "ephemeral"
-                  };
-                }
+              const textBlock = processContentPart({
+                type: "text",
+                text: typeof contentPart.text === "string"
+                  ? contentPart.text
+                  : JSON.stringify(contentPart.text)
+              });
+              if (!textBlock.cache_control) {
+                addCacheControl(textBlock, textBlock.text.length > 1000 || isLikelyFileContent(textBlock.text));
               }
               contentBlocks.push(textBlock);
             } else if (contentPart.type === "image") {
-              const imageBlock: any = {
+              const imageBlock = processContentPart({
                 type: "image_url",
                 image_url: {
                   url: contentPart.source?.type === "base64"
                   ? `data:${contentPart.source.media_type};base64,${contentPart.source.data}`
                   : contentPart.source?.data || contentPart.source?.url
                 }
-              };
-              if (contentPart.cache_control) {
-                imageBlock.cache_control = contentPart.cache_control;
+              });
+              if (!imageBlock.cache_control) {
+                addCacheControl(imageBlock);
               }
               contentBlocks.push(imageBlock);
             } else if (contentPart.type === "tool_result") {
@@ -285,9 +303,7 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   ? contentPart.content
                   : JSON.stringify(contentPart.content),
               };
-              if (model.includes('claude') && toolMessage.content.length > 500) {
-                toolMessage.cache_control = {"type": "ephemeral"};
-              }
+              addCacheControl(toolMessage, toolMessage.content.length > 500);
               subsequentToolMessages.push(toolMessage);
             }
           });
@@ -320,9 +336,7 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
           type: "text",
           text: item.text
         };
-        if (model.includes('claude')) {
-          content.cache_control = {"type": "ephemeral"};
-        }
+        addCacheControl(content);
         return {
           role: "system",
           content: [content]
@@ -330,11 +344,10 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
       })
     : [{
         role: "system",
-        content: [{
+        content: [addCacheControl({
           type: "text",
-          text: system,
-          ...(model.includes('claude') ? { cache_control: {"type": "ephemeral"} } : {})
-        }]
+          text: system
+        })]
       }];
 
   const data: any = {
