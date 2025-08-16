@@ -11,43 +11,6 @@ interface MessageCreateParamsBase {
   }
 }
 
-function isLikelyFileContent(text: any): boolean {
-  // Ensure text is a string
-  if (typeof text !== "string") return false;
-
-  const lines = text.split('\n');
-  const totalChars = text.length;
-  const totalLines = lines.length;
-
-  // 长文本直接认为是文件
-  if (totalLines > 20) return true;
-
-  // 空行比例过高 → 可能是自然语言
-  const emptyLines = lines.filter(l => !l.trim()).length;
-  if (emptyLines / totalLines > 0.4) return false;
-
-  // 自然语言标点比例（中文/英文）
-  const naturalPunctRegex = /[。！？，；：、“”‘’\.\?\!,;:"']/g;
-  const naturalPunctCount = (text.match(naturalPunctRegex) || []).length;
-  const naturalPunctRatio = naturalPunctCount / totalChars;
-  if (naturalPunctRatio > 0.1) return false;
-
-  // 代码/配置符号比例
-  const codeSymbols = /[={}\[\];:#@\/\\|<>()+\-*&%$]/g;
-  const codeSymbolCount = (text.match(codeSymbols) || []).length;
-  const codeSymbolRatio = codeSymbolCount / totalChars;
-
-  // 缩进/对齐特征（行开头空格或Tab）
-  const indentedLines = lines.filter(l => /^\s+/.test(l)).length;
-  const indentRatio = indentedLines / totalLines;
-
-  // 判断逻辑
-  const hasCodeStructure = codeSymbolRatio > 0.05 || indentRatio > 0.3;
-  const hasUniformStructure = lines.every(l => /^\s*$|^\s*\S+\s*=/.test(l)); // 像配置文件
-
-  return hasCodeStructure || hasUniformStructure;
-}
-
 /**
  * Validates OpenAI format messages to ensure complete tool_calls/tool message pairing.
  * Requires tool messages to immediately follow assistant messages with tool_calls.
@@ -157,35 +120,12 @@ export function mapModel(anthropicModel: string): string {
 export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
   const { model, messages, system = [], temperature, tools, stream, thinking } = body;
 
-  let cacheControlBlocksCount = 0;
-  const MAX_CACHE_CONTROL_BLOCKS = 4;
-
-  const addCacheControl = (block: any, condition: boolean = true) => {
-    if (cacheControlBlocksCount < MAX_CACHE_CONTROL_BLOCKS && condition) {
-      if (model.includes('claude')) {
-        block.cache_control = { "type": "ephemeral" };
-        cacheControlBlocksCount++;
-      }
-    }
-    return block;
-  };
-
-  const processContentPart = (block: any) => {
-    if (block.cache_control) {
-      if (cacheControlBlocksCount < MAX_CACHE_CONTROL_BLOCKS) {
-        cacheControlBlocksCount++;
-      } else {
-        delete block.cache_control;
-      }
-    }
-    return block;
-  };
-
   const openAIMessages = Array.isArray(messages)
     ? messages.flatMap((anthropicMessage) => {
         const openAiMessagesFromThisAnthropicMessage: any[] = [];
 
         if (!Array.isArray(anthropicMessage.content)) {
+          // For simple string content, push as-is
           if (typeof anthropicMessage.content === "string") {
             openAiMessagesFromThisAnthropicMessage.push({
               role: anthropicMessage.role,
@@ -200,40 +140,26 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             role: "assistant",
             content: null,
           };
-          const contentBlocks: any[] = [];
+          const contentBlocks: any[] = []; // Use array to support mixed content/images
           const toolCalls: any[] = [];
 
-          anthropicMessage.content.forEach((contentPart) => {
+          anthropicMessage.content.forEach((contentPart: any) => { // Ensure contentPart is typed as 'any' or specific type
             if (contentPart.type === "text") {
-              const textBlock: any = {
-                type: "text",
-                text: typeof contentPart.text === "string"
-                  ? contentPart.text
-                  : JSON.stringify(contentPart.text)
-              };
-              const textBlock = processContentPart({
+              contentBlocks.push({
                 type: "text",
                 text: typeof contentPart.text === "string"
                   ? contentPart.text
                   : JSON.stringify(contentPart.text)
               });
-              if (!textBlock.cache_control) {
-                addCacheControl(textBlock, textBlock.text.length > 1000);
-              }
-              contentBlocks.push(textBlock);
             } else if (contentPart.type === "image") {
-              const imageBlock = processContentPart({
+              contentBlocks.push({
                 type: "image_url",
                 image_url: {
                   url: contentPart.source?.type === "base64"
-                  ? `data:${contentPart.source.media_type};base64,${contentPart.source.data}`
-                  : contentPart.source?.data || contentPart.source?.url
+                  ? `data:${contentPart.source.media_type || 'image/jpeg'};base64,${contentPart.source.data}` // Default media type
+                  : contentPart.source?.data || contentPart.source?.url // Fallback for other source types
                 }
               });
-              if (!imageBlock.cache_control) {
-                addCacheControl(imageBlock);
-              }
-              contentBlocks.push(imageBlock);
             } else if (contentPart.type === "tool_use") {
               toolCalls.push({
                 id: contentPart.id,
@@ -246,11 +172,10 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             }
           });
 
-          // Use content blocks format if we have cache_control, images, or mixed content
-          if (contentBlocks.some(block => block.cache_control || block.type === "image_url" || contentBlocks.length > 1)) {
+          // Decide content format: array for mixed/image, string for single text
+          if (contentBlocks.length > 1 || contentBlocks.some(block => block.type === "image_url")) {
             assistantMessage.content = contentBlocks;
           } else if (contentBlocks.length === 1 && contentBlocks[0].type === "text") {
-            // Convert to string for backward compatibility when single text block without cache_control
             assistantMessage.content = contentBlocks[0].text;
           }
           
@@ -261,50 +186,34 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             openAiMessagesFromThisAnthropicMessage.push(assistantMessage);
           }
         } else if (anthropicMessage.role === "user") {
-          const contentBlocks: any[] = [];
+          const contentBlocks: any[] = []; // Use array to support mixed content/images
           const subsequentToolMessages: any[] = [];
 
-          anthropicMessage.content.forEach((contentPart) => {
+          anthropicMessage.content.forEach((contentPart: any) => { // Ensure contentPart is typed as 'any' or specific type
             if (contentPart.type === "text") {
-              const textBlock: any = {
-                type: "text",
-                text: typeof contentPart.text === "string"
-                  ? contentPart.text
-                  : JSON.stringify(contentPart.text)
-              };
-              const textBlock = processContentPart({
+              contentBlocks.push({
                 type: "text",
                 text: typeof contentPart.text === "string"
                   ? contentPart.text
                   : JSON.stringify(contentPart.text)
               });
-              if (!textBlock.cache_control) {
-                addCacheControl(textBlock, textBlock.text.length > 1000 || isLikelyFileContent(textBlock.text));
-              }
-              contentBlocks.push(textBlock);
             } else if (contentPart.type === "image") {
-              const imageBlock = processContentPart({
+              contentBlocks.push({
                 type: "image_url",
                 image_url: {
                   url: contentPart.source?.type === "base64"
-                  ? `data:${contentPart.source.media_type};base64,${contentPart.source.data}`
-                  : contentPart.source?.data || contentPart.source?.url
+                  ? `data:${contentPart.source.media_type || 'image/jpeg'};base64,${contentPart.source.data}` // Default media type
+                  : contentPart.source?.data || contentPart.source?.url // Fallback for other source types
                 }
               });
-              if (!imageBlock.cache_control) {
-                addCacheControl(imageBlock);
-              }
-              contentBlocks.push(imageBlock);
             } else if (contentPart.type === "tool_result") {
-              const toolMessage: any = {
+              subsequentToolMessages.push({
                 role: "tool",
                 tool_call_id: contentPart.tool_use_id,
                 content: typeof contentPart.content === "string"
                   ? contentPart.content
                   : JSON.stringify(contentPart.content),
-              };
-              addCacheControl(toolMessage, toolMessage.content.length > 500);
-              subsequentToolMessages.push(toolMessage);
+              });
             }
           });
 
@@ -314,11 +223,10 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
               content: null
             };
 
-            // Use content blocks format if we have cache_control, images, or mixed content
-            if (contentBlocks.some(block => block.cache_control || block.type === "image_url" || contentBlocks.length > 1)) {
+            // Decide content format: array for mixed/image, string for single text
+            if (contentBlocks.length > 1 || contentBlocks.some(block => block.type === "image_url")) {
               userMessage.content = contentBlocks;
-            } else {
-              // Convert to string for backward compatibility when single text block without cache_control
+            } else if (contentBlocks.length === 1 && contentBlocks[0].type === "text") {
               userMessage.content = contentBlocks[0].text;
             }
             
@@ -331,12 +239,15 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
     : [];
 
   const systemMessages = Array.isArray(system)
-    ? system.map((item) => {
+    ? system.map((item, index, arr) => {
         const content: any = {
           type: "text",
           text: item.text
         };
-        addCacheControl(content);
+        // 仅在模型包含 'claude' 且是系统消息的最后一个内容块时添加 cache_control
+        if (model.includes('claude') && index === arr.length - 1) {
+          content.cache_control = {"type": "ephemeral"};
+        }
         return {
           role: "system",
           content: [content]
@@ -344,10 +255,12 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
       })
     : [{
         role: "system",
-        content: [addCacheControl({
+        content: [{
           type: "text",
-          text: system
-        })]
+          text: system,
+          // 如果 system 是字符串或单个对象，且模型是 claude，直接添加 cache_control
+          ...(model.includes('claude') ? { cache_control: {"type": "ephemeral"} } : {})
+        }]
       }];
 
   const data: any = {
@@ -355,7 +268,7 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
     messages: [...systemMessages, ...openAIMessages],
     temperature,
     stream,
-    usage: {
+    usage: { // Re-introduce usage field for Bedrock
       include: true
     }
   };
@@ -378,8 +291,36 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
     }));
   }
 
-  // Validate OpenAI messages to ensure complete tool_calls/tool message pairing
   data.messages = [...systemMessages, ...validateOpenAIToolCalls(openAIMessages)];
 
+  // --- 缓存逻辑：参照 claude-code-router ---
+  // 在所有消息（包括系统消息和处理后的 openAIMessages）准备好之后
+  // 找到最终 messages 数组中的最后一个消息的最后一个内容块，并为其添加 cache_control
+  if (data.messages.length > 0 && model.includes('claude')) { // 仅对 Claude 模型进行缓存
+      const lastMessage = data.messages[data.messages.length - 1];
+
+      // 确保最后一个消息是用户或助手消息，并且有内容
+      // 避免对 'system' 或 'tool' 角色（如果是单独的 tool 消息）进行此操作
+      if (lastMessage.role === 'user' || lastMessage.role === 'assistant') {
+          let lastContentBlock;
+
+          if (Array.isArray(lastMessage.content) && lastMessage.content.length > 0) {
+              lastContentBlock = lastMessage.content[lastMessage.content.length - 1];
+          } else if (typeof lastMessage.content === 'string') {
+              // 如果最后一个消息的内容是字符串，将其视为文本块
+              // 注意：这里直接修改了 lastMessage.content，这通常是安全的，因为它是局部变量
+              lastMessage.content = [{ type: 'text', text: lastMessage.content }];
+              lastContentBlock = lastMessage.content[0];
+          } else if (typeof lastMessage.content === 'object' && lastMessage.content.type === 'text') {
+              // 如果是单个文本对象 (虽然在 Anthropic 消息中通常会被包装成数组)
+              lastContentBlock = lastMessage.content;
+          }
+
+          // 确保找到了一个内容块，并且它是文本块（思考块不能直接缓存）
+          if (lastContentBlock && lastContentBlock.type === 'text') {
+              lastContentBlock.cache_control = { type: 'ephemeral' };
+          }
+      }
+  }
   return data;
 }
