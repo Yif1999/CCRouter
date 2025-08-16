@@ -11,7 +11,10 @@ interface MessageCreateParamsBase {
   }
 }
 
-function isLikelyFileContent(text: string): boolean {
+function isLikelyFileContent(text: any): boolean {
+  // Ensure text is a string
+  if (typeof text !== "string") return false;
+
   const lines = text.split('\n');
   const totalChars = text.length;
   const totalLines = lines.length;
