@@ -8,14 +8,13 @@ async function calculateUsageWithCacheCreation(usage: any, model: string) {
   
   let cacheCreationTokens = 0;
   
-  // Debug info - will be exposed via response headers
+  // Usage info for response headers (for transparency)
   const debugInfo: any = {
     actualCost,
     inputTokens,
     outputTokens,
     cacheReadTokens,
-    model,
-    usageRaw: JSON.stringify(usage)
+    model
   };
   
   // If we have actual cost information, try to calculate cache creation tokens
@@ -47,7 +46,7 @@ async function calculateUsageWithCacheCreation(usage: any, model: string) {
     }
   }
   
-  // Store debug info globally for access in response
+  // Store usage info globally for response headers
   (globalThis as any).debugInfo = debugInfo;
   
   return {
