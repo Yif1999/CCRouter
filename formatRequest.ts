@@ -227,6 +227,9 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
     messages: [...systemMessages, ...openAIMessages],
     temperature,
     stream,
+    usage: {
+      include: true
+    }
   };
 
   if (tools) {
