@@ -5,8 +5,45 @@ interface MessageCreateParamsBase {
   temperature?: number;
   tools?: any[];
   stream?: boolean;
+  thinking?: {
+    type: string;
+    budget_tokens?: number;
+  }
 }
 
+function isLikelyFileContent(text: string): boolean {
+  const lines = text.split('\n');
+  const totalChars = text.length;
+  const totalLines = lines.length;
+
+  // 长文本直接认为是文件
+  if (totalLines > 20) return true;
+
+  // 空行比例过高 → 可能是自然语言
+  const emptyLines = lines.filter(l => !l.trim()).length;
+  if (emptyLines / totalLines > 0.4) return false;
+
+  // 自然语言标点比例（中文/英文）
+  const naturalPunctRegex = /[。！？，；：、“”‘’\.\?\!,;:"']/g;
+  const naturalPunctCount = (text.match(naturalPunctRegex) || []).length;
+  const naturalPunctRatio = naturalPunctCount / totalChars;
+  if (naturalPunctRatio > 0.1) return false;
+
+  // 代码/配置符号比例
+  const codeSymbols = /[={}\[\];:#@\/\\|<>()+\-*&%$]/g;
+  const codeSymbolCount = (text.match(codeSymbols) || []).length;
+  const codeSymbolRatio = codeSymbolCount / totalChars;
+
+  // 缩进/对齐特征（行开头空格或Tab）
+  const indentedLines = lines.filter(l => /^\s+/.test(l)).length;
+  const indentRatio = indentedLines / totalLines;
+
+  // 判断逻辑
+  const hasCodeStructure = codeSymbolRatio > 0.05 || indentRatio > 0.3;
+  const hasUniformStructure = lines.every(l => /^\s*$|^\s*\S+\s*=/.test(l)); // 像配置文件
+
+  return hasCodeStructure || hasUniformStructure;
+}
 
 /**
  * Validates OpenAI format messages to ensure complete tool_calls/tool message pairing.
@@ -115,7 +152,7 @@ export function mapModel(anthropicModel: string): string {
 }
 
 export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
-  const { model, messages, system = [], temperature, tools, stream } = body;
+  const { model, messages, system = [], temperature, tools, stream, thinking } = body;
 
   const openAIMessages = Array.isArray(messages)
     ? messages.flatMap((anthropicMessage) => {
@@ -147,11 +184,33 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   ? contentPart.text
                   : JSON.stringify(contentPart.text)
               };
-              // Preserve cache_control if present
+              // Preserve cache_control if present, or force caching
               if (contentPart.cache_control) {
                 textBlock.cache_control = contentPart.cache_control;
+              } else if (model.includes('claude')) {
+                const textContent = textBlock.text;
+                if (textContent.length > 1000) {
+                  textBlock.cache_control = {
+                    "type": "ephemeral"
+                  };
+                }
               }
               contentBlocks.push(textBlock);
+            } else if (contentPart.type === "image") {
+              const imageBlock: any = {
+                type: "image_url",
+                image_url: {
+                  url: contentPart.source?.type === "base64"
+                  ? `data:${contentPart.source.media_type};base64,${contentPart.source.data}`
+                  : contentPart.source?.data || contentPart.source?.url
+                }
+              };
+              if (contentPart.cache_control) {
+                imageBlock.cache_control = contentPart.cache_control;
+              } else if (model.includes('claude')) {
+                imageBlock.cache_control = {"type": "ephemeral"};
+              }
+              contentBlocks.push(imageBlock);
             } else if (contentPart.type === "tool_use") {
               toolCalls.push({
                 id: contentPart.id,
@@ -164,12 +223,12 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
             }
           });
 
-          // Use content blocks format if we have cache_control, otherwise use string
-          if (contentBlocks.some(block => block.cache_control)) {
+          // Use content blocks format if we have cache_control, images, or mixed content
+          if (contentBlocks.some(block => block.cache_control || block.type === "image_url" || contentBlocks.length > 1)) {
             assistantMessage.content = contentBlocks;
-          } else if (contentBlocks.length > 0) {
-            // Convert to string for backward compatibility when no cache_control
-            assistantMessage.content = contentBlocks.map(block => block.text).join("\n").trim();
+          } else if (contentBlocks.length === 1 && contentBlocks[0].type === "text") {
+            // Convert to string for backward compatibility when single text block without cache_control
+            assistantMessage.content = contentBlocks[0].text;
           }
           
           if (toolCalls.length > 0) {
@@ -190,19 +249,43 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   ? contentPart.text
                   : JSON.stringify(contentPart.text)
               };
-              // Preserve cache_control if present
+              // Preserve cache_control if present, or force caching
               if (contentPart.cache_control) {
                 textBlock.cache_control = contentPart.cache_control;
+              } else if (model.includes('claude')) {
+                const textContent = textBlock.text;
+                if (textContent.length > 1000 || isLikelyFileContent(textBlock)) {
+                  textBlock.cache_control = {
+                    "type": "ephemeral"
+                  };
+                }
               }
               contentBlocks.push(textBlock);
+            } else if (contentPart.type === "image") {
+              const imageBlock: any = {
+                type: "image_url",
+                image_url: {
+                  url: contentPart.source?.type === "base64"
+                  ? `data:${contentPart.source.media_type};base64,${contentPart.source.data}`
+                  : contentPart.source?.data || contentPart.source?.url
+                }
+              };
+              if (contentPart.cache_control) {
+                imageBlock.cache_control = contentPart.cache_control;
+              }
+              contentBlocks.push(imageBlock);
             } else if (contentPart.type === "tool_result") {
-              subsequentToolMessages.push({
+              const toolMessage: any = {
                 role: "tool",
                 tool_call_id: contentPart.tool_use_id,
                 content: typeof contentPart.content === "string"
                   ? contentPart.content
                   : JSON.stringify(contentPart.content),
-              });
+              };
+              if (model.includes('claude') && toolMessage.content.length > 500) {
+                toolMessage.cache_control = {"type": "ephemeral"};
+              }
+              subsequentToolMessages.push(toolMessage);
             }
           });
 
@@ -211,13 +294,13 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
               role: "user",
               content: null
             };
-            
-            // Use content blocks format if we have cache_control, otherwise use string
-            if (contentBlocks.some(block => block.cache_control)) {
+
+            // Use content blocks format if we have cache_control, images, or mixed content
+            if (contentBlocks.some(block => block.cache_control || block.type === "image_url" || contentBlocks.length > 1)) {
               userMessage.content = contentBlocks;
             } else {
-              // Convert to string for backward compatibility when no cache_control
-              userMessage.content = contentBlocks.map(block => block.text).join("\n").trim();
+              // Convert to string for backward compatibility when single text block without cache_control
+              userMessage.content = contentBlocks[0].text;
             }
             
             openAiMessagesFromThisAnthropicMessage.push(userMessage);
@@ -260,6 +343,13 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
       include: true
     }
   };
+
+  if (thinking && thinking.type === 'enabled') {
+    data.reasoning = {
+      effort: thinking.budget_tokens ? (thinking.budget_tokens > 50000 ? "high" : thinking.budget_tokens >  20000 ? "medium" : "low") : "low",
+      enabled: true
+    };
+  }
 
   if (tools) {
     data.tools = tools.map((item: any) => ({

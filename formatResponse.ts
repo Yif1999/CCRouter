@@ -35,6 +35,26 @@ export function formatOpenAIToAnthropic(completion: any, model: string): any {
 
   let content: any = [];
   
+  // Add web search annotations if present
+  if (completion.choices[0].message.annotations) {
+    const searchId = `srvtoolu_${Date.now()}`;
+    content.push({
+      type: "server_tool_use",
+      id: searchId,
+      name: "web_search",
+      input: { query: ""}
+    });
+    content.push({
+      type: "web_search_tool_result",
+      tool_use_id: searchId,
+      content: completion.choices[0].message.annotations.map((annotation: any) => ({
+        type: "web_search_result",
+        url: annotation.url_citation?.url || annotation.url,
+        title: annotation.url_citation?.title || annotation.title
+      }))
+    });
+  }
+
   // Add text content if present
   if (completion.choices[0].message.content) {
     content.push({ 
