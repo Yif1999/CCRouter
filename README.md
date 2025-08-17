@@ -13,8 +13,6 @@ This fork adds several important improvements over the original:
 - **🎯 Model Mapping**: Intelligent model name translation between Anthropic and OpenRouter formats
 - **💰 Cost Transparency**: Real-time cost calculation based on OpenRouter's actual billing
 
-> **Note:** For Anthropic models with heavy usage (>$200), consider using [claude-relay-service](https://github.com/Wei-Shaw/claude-relay-service) for better value.
-
 ## Quick Usage
 
 ### One-line Install (Recommended)
@@ -138,7 +136,3 @@ Special thanks to these projects that inspired CCRouter:
 - **Commercial Use**: Any commercial use should be carefully evaluated against relevant terms of service and licensing requirements
 
 **Use at your own risk and discretion.**
-
-## License
-
-MIT
