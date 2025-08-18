@@ -184,7 +184,7 @@ fi
 # Remove existing Claude Code environment variables
 if [ -f "$rc_file" ]; then
     # Use a temporary file to store content without Claude Code variables
-    grep -v "^# Claude Code environment variables\|^export ANTHROPIC_BASE_URL\|^export ANTHROPIC_API_KEY\|^export ANTHROPIC_MODEL\|^export ANTHROPIC_SMALL_FAST_MODEL" "$rc_file" > "${rc_file}.tmp" || true
+    grep -v "^# Claude Code environment variables\|^export ANTHROPIC_BASE_URL\|^export ANTHROPIC_AUTH_TOKEN\|^export ANTHROPIC_MODEL\|^export ANTHROPIC_SMALL_FAST_MODEL" "$rc_file" > "${rc_file}.tmp" || true
     mv "${rc_file}.tmp" "$rc_file"
 fi
 
@@ -192,7 +192,7 @@ fi
 echo "" >> "$rc_file"
 echo "# Claude Code environment variables for $provider" >> "$rc_file"
 echo "export ANTHROPIC_BASE_URL=$base_url" >> "$rc_file"
-echo "export ANTHROPIC_API_KEY=$api_key" >> "$rc_file"
+echo "export ANTHROPIC_AUTH_TOKEN=$api_key" >> "$rc_file"
 echo "export ANTHROPIC_MODEL=$model_main" >> "$rc_file"
 echo "export ANTHROPIC_SMALL_FAST_MODEL=$model_small" >> "$rc_file"
 echo "✅ Environment variables configured in $rc_file"
@@ -207,5 +207,5 @@ echo "🚀 Then you can start using Claude Code with:"
 echo "   claude"
 echo ""
 echo "💡 Tip: To maintain multiple configurations, use shell aliases:"
-echo "   alias c1='ANTHROPIC_BASE_URL=\"https://ccrouter.yiguanyaoyaofen.workers.dev\" ANTHROPIC_API_KEY=\"key1\" ANTHROPIC_MODEL=\"moonshotai/kimi-k2\" ANTHROPIC_SMALL_FAST_MODEL=\"google/gemini-2.5-flash\" claude'"
-echo "   alias c2='ANTHROPIC_BASE_URL=\"https://api.moonshot.ai/anthropic/\" ANTHROPIC_API_KEY=\"key2\" ANTHROPIC_MODEL=\"kimi-k2-0711-preview\" ANTHROPIC_SMALL_FAST_MODEL=\"moonshot-v1-8k\" claude'"
+echo "   alias c1='ANTHROPIC_BASE_URL=\"https://ccrouter.yiguanyaoyaofen.workers.dev\" ANTHROPIC_AUTH_TOKEN=\"key1\" ANTHROPIC_MODEL=\"moonshotai/kimi-k2\" ANTHROPIC_SMALL_FAST_MODEL=\"google/gemini-2.5-flash\" claude'"
+echo "   alias c2='ANTHROPIC_BASE_URL=\"https://api.moonshot.ai/anthropic/\" ANTHROPIC_AUTH_TOKEN=\"key2\" ANTHROPIC_MODEL=\"kimi-k2-0711-preview\" ANTHROPIC_SMALL_FAST_MODEL=\"moonshot-v1-8k\" claude'"

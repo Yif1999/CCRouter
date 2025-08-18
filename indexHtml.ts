@@ -209,8 +209,8 @@ export const indexHtml = `<!DOCTYPE html>
             <p>Add these to your shell config (<code>~/.bashrc</code> or <code>~/.zshrc</code>):</p>
             <div class="code-block">
                 export ANTHROPIC_BASE_URL="https://ccrouter.yiguanyaoyaofen.workers.dev"<br>
-                export ANTHROPIC_API_KEY="your-openrouter-api-key"
-                <button class="copy-button" onclick="copyToClipboard(this, 'export ANTHROPIC_BASE_URL=&quot;https://ccrouter.yiguanyaoyaofen.workers.dev&quot;\\nexport ANTHROPIC_API_KEY=&quot;your-openrouter-api-key&quot;')">Copy</button>
+                export ANTHROPIC_AUTH_TOKEN="your-openrouter-api-key"
+                <button class="copy-button" onclick="copyToClipboard(this, 'export ANTHROPIC_BASE_URL=&quot;https://ccrouter.yiguanyaoyaofen.workers.dev&quot;\\nexport ANTHROPIC_AUTH_TOKEN=&quot;your-openrouter-api-key&quot;')">Copy</button>
             </div>
             <p><strong>Optional:</strong> Configure specific models (browse at <a href="https://openrouter.ai/models" target="_blank">openrouter.ai/models</a>):</p>
             <div class="code-block">
