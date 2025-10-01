@@ -50,7 +50,7 @@ async function calculateUsageWithCacheCreation(usage: any, model: string) {
   (globalThis as any).debugInfo = debugInfo;
   
   return {
-    input_tokens: inputTokens - cacheReadTokens, // Exclude cache read tokens from input
+    input_tokens: inputTokens - cacheReadTokens - cacheCreationTokens, // Exclude cache tokens from input
     output_tokens: outputTokens,
     cache_creation_input_tokens: cacheCreationTokens,
     cache_read_input_tokens: cacheReadTokens
