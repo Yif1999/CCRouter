@@ -110,9 +110,9 @@ export function mapModel(anthropicModel: string): string {
   if (anthropicModel.includes('haiku')) {
     return 'anthropic/claude-3.5-haiku';
   } else if (anthropicModel.includes('sonnet')) {
-    return 'anthropic/claude-sonnet-4';
+    return 'anthropic/claude-sonnet-4.5';
   } else if (anthropicModel.includes('opus')) {
-    return 'anthropic/claude-opus-4';
+    return 'anthropic/claude-opus-4.1';
   }
   return anthropicModel;
 }
