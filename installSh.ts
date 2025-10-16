@@ -83,7 +83,7 @@ case "$provider_choice" in
         default_base_url="https://ccrouter.yiguanyaoyaofen.workers.dev"
         api_key_url="https://openrouter.ai/keys"
         default_model_main="anthropic/claude-sonnet-4.5"
-        default_model_small="anthropic/claude-3.5-haiku"
+        default_model_small="anthropic/claude-haiku-4.5"
         ;;
     2)
         provider="moonshot"
