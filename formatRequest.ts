@@ -9,6 +9,10 @@ interface MessageCreateParamsBase {
     type: string;
     budget_tokens?: number;
   }
+  // Some clients may also send max_tokens; keep loose typing
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  max_tokens?: number;
 }
 
 /**
@@ -118,7 +122,7 @@ export function mapModel(anthropicModel: string): string {
 }
 
 export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
-  const { model, messages, system = [], temperature, tools, stream, thinking } = body;
+  const { model, messages, system = [], temperature, tools, stream, thinking } = body as any;
 
   const openAIMessages = Array.isArray(messages)
     ? messages.flatMap((anthropicMessage) => {
@@ -142,6 +146,7 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
           };
           const contentBlocks: any[] = []; // Use array to support mixed content/images
           const toolCalls: any[] = [];
+          const reasoningDetails: any[] = [];
 
           anthropicMessage.content.forEach((contentPart: any) => {
             if (contentPart.type === "text") {
@@ -169,6 +174,13 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   arguments: JSON.stringify(contentPart.input),
                 },
               });
+            } else if (contentPart.type === "thinking") {
+              const rd: any = { type: 'reasoning', text: contentPart.text };
+              if (contentPart.signature) rd.signature = contentPart.signature;
+              reasoningDetails.push(rd);
+            } else if (contentPart.type === "redacted_thinking") {
+              const rd: any = { type: 'redacted', encrypted: contentPart.encrypted || true };
+              reasoningDetails.push(rd);
             }
           });
 
@@ -182,7 +194,14 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
           if (toolCalls.length > 0) {
             assistantMessage.tool_calls = toolCalls;
           }
-          if (assistantMessage.content || (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0)) {
+          if (reasoningDetails.length > 0) {
+            assistantMessage.reasoning_details = reasoningDetails;
+          }
+          if (
+            assistantMessage.content ||
+            (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) ||
+            assistantMessage.reasoning_details
+          ) {
             openAiMessagesFromThisAnthropicMessage.push(assistantMessage);
           }
         } else if (anthropicMessage.role === "user") {
@@ -275,11 +294,30 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
     }
   };
 
+  // Map Anthropic thinking -> OpenRouter unified reasoning
   if (thinking && thinking.type === 'enabled') {
-    data.reasoning = {
-      effort: thinking.budget_tokens ? (thinking.budget_tokens > 50000 ? "high" : thinking.budget_tokens >  20000 ? "medium" : "low") : "low",
-      enabled: true
-    };
+    const budget = typeof thinking.budget_tokens === 'number' ? thinking.budget_tokens : undefined;
+    if (budget && budget > 0) {
+      data.reasoning = { max_tokens: budget };
+      // Enforce max_tokens strictly greater than reasoning budget to leave room for the final answer
+      const requestedMax = (body as any).max_tokens;
+      const minNeeded = budget + 512;
+      if (typeof requestedMax === 'number' && isFinite(requestedMax)) {
+        data.max_tokens = Math.max(requestedMax, minNeeded);
+      } else {
+        data.max_tokens = minNeeded;
+      }
+    } else {
+      // If no budget provided, enable minimal reasoning by signaling low effort
+      data.reasoning = { max_tokens: 256 };
+      const requestedMax = (body as any).max_tokens;
+      const minNeeded = 256 + 512;
+      if (typeof requestedMax === 'number' && isFinite(requestedMax)) {
+        data.max_tokens = Math.max(requestedMax, minNeeded);
+      } else {
+        data.max_tokens = minNeeded;
+      }
+    }
   }
 
   // `tools` 数组不需要自己的 cache_control，因为它会被 system 消息的断点覆盖。
