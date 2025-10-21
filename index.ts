@@ -1,5 +1,5 @@
 import { Env } from './env';
-import { formatAnthropicToOpenAI } from './formatRequest';
+import { formatAnthropicToOpenAI, BadRequestError } from './formatRequest';
 import { streamOpenAIToAnthropic } from './streamResponse';
 import { formatOpenAIToAnthropic } from './formatResponse';
 import { indexHtml } from './indexHtml';
@@ -40,8 +40,17 @@ export default {
     }
     
     if (url.pathname === '/v1/messages' && request.method === 'POST') {
-      const anthropicRequest = await request.json();
-      const openaiRequest = formatAnthropicToOpenAI(anthropicRequest);
+      let openaiRequest: any;
+      try {
+        const anthropicRequest = await request.json();
+        openaiRequest = formatAnthropicToOpenAI(anthropicRequest);
+      } catch (err: any) {
+        const message = err instanceof BadRequestError ? err.message : (err?.message || 'Invalid request');
+        return new Response(JSON.stringify({ error: { message, type: 'invalid_request_error' } }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const bearerToken = request.headers.get("X-Api-Key") || 
         request.headers.get("Authorization")?.replace("Bearer ", "");
 

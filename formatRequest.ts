@@ -16,6 +16,17 @@ interface MessageCreateParamsBase {
 }
 
 /**
+ * Error used to signal a client-side problem with the request body (HTTP 400).
+ */
+export class BadRequestError extends Error {
+  status = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = 'BadRequestError';
+  }
+}
+
+/**
  * Validates OpenAI format messages to ensure complete tool_calls/tool message pairing.
  * Requires tool messages to immediately follow assistant messages with tool_calls.
  * Enforces strict immediate following sequence between tool_calls and tool messages.
@@ -121,6 +132,45 @@ export function mapModel(anthropicModel: string): string {
   return anthropicModel;
 }
 
+function mapAnthropicImageToOpenAIImageUrl(contentPart: any): any {
+  const src = contentPart?.source || {};
+  const srcType = src?.type;
+  if (!srcType) {
+    throw new BadRequestError('Image block is missing source.type');
+  }
+
+  if (srcType === 'url') {
+    if (!src.url || typeof src.url !== 'string') {
+      throw new BadRequestError('Image source.type=url requires a valid url');
+    }
+    return {
+      type: 'image_url',
+      image_url: { url: src.url }
+    };
+  }
+
+  if (srcType === 'base64') {
+    const allowed = new Set(['image/jpeg','image/png','image/gif','image/webp']);
+    const mediaType = src.media_type;
+    if (!mediaType || typeof mediaType !== 'string' || !allowed.has(mediaType)) {
+      throw new BadRequestError(`Unsupported image media_type: ${mediaType}. Supported types: image/jpeg, image/png, image/gif, image/webp.`);
+    }
+    if (!src.data || typeof src.data !== 'string') {
+      throw new BadRequestError('Image source.type=base64 requires a base64 data string');
+    }
+    return {
+      type: 'image_url',
+      image_url: { url: `data:${mediaType};base64,${src.data}` }
+    };
+  }
+
+  if (srcType === 'file') {
+    throw new BadRequestError('Image source.type=file is not supported via OpenRouter /chat/completions. Please use a publicly accessible URL (source.type="url") or provide base64 data (source.type="base64").');
+  }
+
+  throw new BadRequestError(`Unsupported image source type: ${srcType}. Use "url" or "base64".`);
+}
+
 export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
   const { model, messages, system = [], temperature, tools, stream, thinking } = body as any;
 
@@ -157,14 +207,7 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   : JSON.stringify(contentPart.text)
               });
             } else if (contentPart.type === "image") {
-              contentBlocks.push({
-                type: "image_url",
-                image_url: {
-                  url: contentPart.source?.type === "base64"
-                  ? `data:${contentPart.source.media_type || 'image/jpeg'};base64,${contentPart.source.data}` // Default media type
-                  : contentPart.source?.data || contentPart.source?.url // Fallback for other source types
-                }
-              });
+              contentBlocks.push(mapAnthropicImageToOpenAIImageUrl(contentPart));
             } else if (contentPart.type === "tool_use") {
               toolCalls.push({
                 id: contentPart.id,
@@ -217,14 +260,7 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                   : JSON.stringify(contentPart.text)
               });
             } else if (contentPart.type === "image") {
-              contentBlocks.push({
-                type: "image_url",
-                image_url: {
-                  url: contentPart.source?.type === "base64"
-                  ? `data:${contentPart.source.media_type || 'image/jpeg'};base64,${contentPart.source.data}`
-                  : contentPart.source?.data || contentPart.source?.url
-                }
-              });
+              contentBlocks.push(mapAnthropicImageToOpenAIImageUrl(contentPart));
             } else if (contentPart.type === "tool_result") {
               subsequentToolMessages.push({
                 role: "tool",
