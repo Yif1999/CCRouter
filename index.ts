@@ -46,12 +46,18 @@ export default {
         request.headers.get("Authorization")?.replace("Bearer ", "");
 
       const baseUrl = env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+      const upstreamHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${bearerToken}`,
+      };
+      const httpReferer = request.headers.get("HTTP-Referer");
+      const xTitle = request.headers.get("X-Title");
+      if (httpReferer) upstreamHeaders["HTTP-Referer"] = httpReferer;
+      if (xTitle) upstreamHeaders["X-Title"] = xTitle;
+
       const openaiResponse = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${bearerToken}`,
-        },
+        headers: upstreamHeaders,
         body: JSON.stringify(openaiRequest),
       });
 

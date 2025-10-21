@@ -3,6 +3,7 @@ import { calculateCacheCreationTokens, getCachedModelPricing, getModelPricing } 
 async function calculateUsageWithCacheCreation(usage: any, model: string) {
   const inputTokens = usage?.prompt_tokens || 0;
   const outputTokens = usage?.completion_tokens || 0;
+  const reasoningTokens = usage?.reasoning_tokens || 0;
   const cacheReadTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
   const actualCost = usage?.cost;
   
@@ -13,6 +14,7 @@ async function calculateUsageWithCacheCreation(usage: any, model: string) {
     actualCost,
     inputTokens,
     outputTokens,
+    reasoningTokens,
     cacheReadTokens,
     model
   };
@@ -38,7 +40,8 @@ async function calculateUsageWithCacheCreation(usage: any, model: string) {
       cacheCreationTokens = calculateCacheCreationTokens(
         actualCost,
         inputTokens,
-        outputTokens,
+        // Treat reasoning tokens as output tokens for cost math
+        outputTokens + reasoningTokens,
         cacheReadTokens,
         pricing
       );
@@ -52,6 +55,7 @@ async function calculateUsageWithCacheCreation(usage: any, model: string) {
   return {
     input_tokens: inputTokens - cacheReadTokens - cacheCreationTokens, // Exclude cache tokens from input
     output_tokens: outputTokens,
+    reasoning_tokens: reasoningTokens,
     cache_creation_input_tokens: cacheCreationTokens,
     cache_read_input_tokens: cacheReadTokens
   };
@@ -80,6 +84,24 @@ export async function formatOpenAIToAnthropic(completion: any, model: string): P
         title: annotation.url_citation?.title || annotation.title
       }))
     });
+  }
+
+  // Add reasoning details (thinking) if present, preserving order
+  const message = completion.choices[0].message || {};
+  const rd = message.reasoning_details;
+  if (Array.isArray(rd)) {
+    for (const item of rd) {
+      if (item?.encrypted || item?.type === 'redacted') {
+        content.push({ type: 'redacted_thinking' });
+      } else if (typeof item?.text === 'string') {
+        const thinkingBlock: any = { type: 'thinking', text: item.text };
+        if (item.signature) thinkingBlock.signature = item.signature;
+        content.push(thinkingBlock);
+      }
+    }
+  } else if (typeof message.reasoning === 'string' && message.reasoning.length > 0) {
+    // Fallback for simple reasoning text
+    content.push({ type: 'thinking', text: message.reasoning });
   }
 
   // Add text content if present

@@ -5,7 +5,8 @@ async function calculateStreamUsage(
   totalOutputTokens: number,
   totalCacheReadTokens: number,
   actualCost: number | null,
-  model: string
+  model: string,
+  totalReasoningTokens: number
 ) {
   let cacheCreationTokens = 0;
 
@@ -25,7 +26,8 @@ async function calculateStreamUsage(
       cacheCreationTokens = calculateCacheCreationTokens(
         actualCost,
         totalInputTokens,
-        totalOutputTokens,
+        // Treat reasoning tokens as output tokens for cost math
+        totalOutputTokens + (totalReasoningTokens || 0),
         totalCacheReadTokens,
         pricing
       );
@@ -35,6 +37,7 @@ async function calculateStreamUsage(
   return {
     input_tokens: totalInputTokens - totalCacheReadTokens, // Exclude cache read tokens from input
     output_tokens: totalOutputTokens,
+    reasoning_tokens: totalReasoningTokens || 0,
     cache_creation_input_tokens: cacheCreationTokens,
     cache_read_input_tokens: totalCacheReadTokens
   };
@@ -50,6 +53,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalReasoningTokens = 0;
   let totalCacheReadTokens = 0;
   let actualCost: number | null = null;
 
@@ -73,6 +77,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
 
       let contentBlockIndex = 0;
       let hasStartedTextBlock = false;
+      let hasStartedThinkingBlock = false;
       let isToolUse = false;
       let currentToolCallId: string | null = null;
       let toolCallJsonMap = new Map<string, string>();
@@ -104,6 +109,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
                     if (parsed.usage) {
                       totalInputTokens = parsed.usage.prompt_tokens || totalInputTokens;
                       totalOutputTokens = parsed.usage.completion_tokens || totalOutputTokens;
+                      totalReasoningTokens = parsed.usage.reasoning_tokens || totalReasoningTokens;
                       totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens || totalCacheReadTokens;
                       if (parsed.usage.cost !== undefined) actualCost = parsed.usage.cost;
                     }
@@ -139,6 +145,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
                 if (parsed.usage) {
                   totalInputTokens = parsed.usage.prompt_tokens || totalInputTokens;
                   totalOutputTokens = parsed.usage.completion_tokens || totalOutputTokens;
+                  totalReasoningTokens = parsed.usage.reasoning_tokens || totalReasoningTokens;
                   totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens || totalCacheReadTokens;
                   if (parsed.usage.cost !== undefined) actualCost = parsed.usage.cost;
                 }
@@ -158,8 +165,93 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
 
       function processStreamDelta(delta: any) {
 
+        // Handle reasoning (thinking) deltas first to preserve sequence
+        if (delta.reasoning || delta.reasoning_details) {
+          // Close any open tool/text block before starting thinking
+          if (!hasStartedThinkingBlock) {
+            if (isToolUse || hasStartedTextBlock) {
+              enqueueSSE(controller, "content_block_stop", {
+                type: "content_block_stop",
+                index: contentBlockIndex,
+              });
+              isToolUse = false;
+              hasStartedTextBlock = false;
+              contentBlockIndex++;
+            }
+          }
+
+          // Process structured reasoning_details if provided
+          if (Array.isArray(delta.reasoning_details)) {
+            for (const item of delta.reasoning_details) {
+              if (item?.encrypted || item?.type === 'redacted' || item?.type === 'summary') {
+                // Close any open thinking block
+                if (hasStartedThinkingBlock) {
+                  enqueueSSE(controller, "content_block_stop", {
+                    type: "content_block_stop",
+                    index: contentBlockIndex,
+                  });
+                  hasStartedThinkingBlock = false;
+                  contentBlockIndex++;
+                }
+                // Start and stop a redacted_thinking block at current index
+                enqueueSSE(controller, "content_block_start", {
+                  type: "content_block_start",
+                  index: contentBlockIndex,
+                  content_block: { type: 'redacted_thinking' },
+                });
+                enqueueSSE(controller, "content_block_stop", {
+                  type: "content_block_stop",
+                  index: contentBlockIndex,
+                });
+                // Prepare next index for any subsequent block
+                contentBlockIndex++;
+              } else if (typeof item?.text === 'string' && item.text.length > 0) {
+                if (!hasStartedThinkingBlock) {
+                  enqueueSSE(controller, "content_block_start", {
+                    type: "content_block_start",
+                    index: contentBlockIndex,
+                    content_block: { type: "thinking", text: "" },
+                  });
+                  hasStartedThinkingBlock = true;
+                }
+                enqueueSSE(controller, "content_block_delta", {
+                  type: "content_block_delta",
+                  index: contentBlockIndex,
+                  delta: { type: "text_delta", text: item.text },
+                });
+              }
+            }
+          }
+
+          // Process simple reasoning text
+          if (typeof delta.reasoning === 'string' && delta.reasoning.length > 0) {
+            if (!hasStartedThinkingBlock) {
+              enqueueSSE(controller, "content_block_start", {
+                type: "content_block_start",
+                index: contentBlockIndex,
+                content_block: { type: "thinking", text: "" },
+              });
+              hasStartedThinkingBlock = true;
+            }
+            enqueueSSE(controller, "content_block_delta", {
+              type: "content_block_delta",
+              index: contentBlockIndex,
+              delta: { type: "text_delta", text: delta.reasoning },
+            });
+          }
+        }
+
         // Handle tool calls
         if (delta.tool_calls?.length > 0) {
+          // Close thinking block before switching to tool
+          if (hasStartedThinkingBlock) {
+            enqueueSSE(controller, "content_block_stop", {
+              type: "content_block_stop",
+              index: contentBlockIndex,
+            });
+            hasStartedThinkingBlock = false;
+            contentBlockIndex++;
+          }
           // Existing tool call logic
           for (const toolCall of delta.tool_calls) {
             const toolCallId = toolCall.id;
@@ -207,6 +299,15 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
             }
           }
         } else if (delta.content) {
+          // Close thinking block before text
+          if (hasStartedThinkingBlock) {
+            enqueueSSE(controller, "content_block_stop", {
+              type: "content_block_stop",
+              index: contentBlockIndex,
+            });
+            hasStartedThinkingBlock = false;
+            contentBlockIndex++;
+          }
           if (isToolUse) {
             enqueueSSE(controller, "content_block_stop", {
               type: "content_block_stop",
@@ -242,13 +343,14 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
           hasProcessedAnnotations = true;
 
           // Close current content block if needed
-          if (isToolUse || hasStartedTextBlock) {
+          if (isToolUse || hasStartedTextBlock || hasStartedThinkingBlock) {
             enqueueSSE(controller, "content_block_stop", {
               type: "content_block_stop",
               index: contentBlockIndex,
             });
             isToolUse = false;
             hasStartedTextBlock = false;
+            hasStartedThinkingBlock = false;
             contentBlockIndex++;
           }
 
@@ -280,7 +382,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
       }
 
       // Close last content block
-      if (isToolUse || hasStartedTextBlock) {
+      if (isToolUse || hasStartedTextBlock || hasStartedThinkingBlock) {
         enqueueSSE(controller, "content_block_stop", {
           type: "content_block_stop",
           index: contentBlockIndex,
@@ -299,7 +401,8 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
           totalOutputTokens,
           totalCacheReadTokens,
           actualCost,
-          model
+          model,
+          totalReasoningTokens
         ),
       });
 
