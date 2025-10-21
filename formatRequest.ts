@@ -175,11 +175,11 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
                 },
               });
             } else if (contentPart.type === "thinking") {
-              const rd: any = { type: 'reasoning', text: contentPart.text };
+              const rd: any = { text: contentPart.text };
               if (contentPart.signature) rd.signature = contentPart.signature;
               reasoningDetails.push(rd);
             } else if (contentPart.type === "redacted_thinking") {
-              const rd: any = { type: 'redacted', encrypted: contentPart.encrypted || true };
+              const rd: any = { encrypted: true };
               reasoningDetails.push(rd);
             }
           });

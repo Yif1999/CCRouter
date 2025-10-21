@@ -183,7 +183,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
           // Process structured reasoning_details if provided
           if (Array.isArray(delta.reasoning_details)) {
             for (const item of delta.reasoning_details) {
-              if (item?.encrypted || item?.type === 'redacted') {
+              if (item?.encrypted || item?.type === 'redacted' || item?.type === 'summary') {
                 // Close any open thinking block
                 if (hasStartedThinkingBlock) {
                   enqueueSSE(controller, "content_block_stop", {
@@ -191,17 +191,20 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
                     index: contentBlockIndex,
                   });
                   hasStartedThinkingBlock = false;
+                  contentBlockIndex++;
                 }
-                const redIdx = ++contentBlockIndex;
+                // Start and stop a redacted_thinking block at current index
                 enqueueSSE(controller, "content_block_start", {
                   type: "content_block_start",
-                  index: redIdx,
+                  index: contentBlockIndex,
                   content_block: { type: 'redacted_thinking' },
                 });
                 enqueueSSE(controller, "content_block_stop", {
                   type: "content_block_stop",
-                  index: redIdx,
+                  index: contentBlockIndex,
                 });
+                // Prepare next index for any subsequent block
+                contentBlockIndex++;
               } else if (typeof item?.text === 'string' && item.text.length > 0) {
                 if (!hasStartedThinkingBlock) {
                   enqueueSSE(controller, "content_block_start", {
