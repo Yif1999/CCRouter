@@ -26,6 +26,115 @@ export class BadRequestError extends Error {
   }
 }
 
+export type CacheTtlMode = 'ephemeral_5m' | 'ephemeral_1h' | 'mixed';
+
+export interface CacheControlMetadata {
+  ttlMode: CacheTtlMode;
+  explicitTtls: Array<'5m' | '1h'>;
+  sawEphemeralWithoutTtl: boolean;
+  sawCacheControl: boolean;
+  sources: string[];
+}
+
+function normalizeTtlRaw(ttl: unknown): '5m' | '1h' | null {
+  if (typeof ttl === 'string') {
+    const normalized = ttl.trim().toLowerCase();
+    if (['1h', '1hr', '3600s', '3600', '60m'].includes(normalized)) {
+      return '1h';
+    }
+    if (['5m', '5min', '300s', '300'].includes(normalized)) {
+      return '5m';
+    }
+  } else if (typeof ttl === 'number' && Number.isFinite(ttl)) {
+    if (ttl >= 3600) {
+      return '1h';
+    }
+    if (ttl > 0) {
+      return '5m';
+    }
+  }
+  return null;
+}
+
+function collectCacheControlMetadata(body: any): CacheControlMetadata {
+  const explicit = new Set<'5m' | '1h'>();
+  const sources: string[] = [];
+  let sawEphemeralWithoutTtl = false;
+  let sawCacheControl = false;
+
+  const recordCacheControl = (value: any, origin: string) => {
+    if (!value || typeof value !== 'object') {
+      return;
+    }
+    const cacheControl = (value as any).cache_control;
+    if (!cacheControl || typeof cacheControl !== 'object') {
+      return;
+    }
+    if ((cacheControl as any).type !== 'ephemeral') {
+      return;
+    }
+    sawCacheControl = true;
+    const ttl = normalizeTtlRaw((cacheControl as any).ttl);
+    if (ttl) {
+      explicit.add(ttl);
+      sources.push(`${origin}:${ttl}`);
+    } else {
+      sawEphemeralWithoutTtl = true;
+      sources.push(`${origin}:default`);
+    }
+  };
+
+  const inspectContentParts = (content: any, origin: string) => {
+    if (!content) {
+      return;
+    }
+    if (Array.isArray(content)) {
+      content.forEach((part, idx) => {
+        if (part && typeof part === 'object') {
+          recordCacheControl(part, `${origin}.content[${idx}]`);
+        }
+      });
+    } else if (typeof content === 'object') {
+      recordCacheControl(content, `${origin}.content`);
+    }
+  };
+
+  if (Array.isArray(body?.system)) {
+    body.system.forEach((item: any, idx: number) => {
+      recordCacheControl(item, `system[${idx}]`);
+      inspectContentParts(item?.content, `system[${idx}]`);
+    });
+  } else if (body?.system && typeof body.system === 'object') {
+    recordCacheControl(body.system, 'system');
+    inspectContentParts((body.system as any).content, 'system');
+  }
+
+  if (Array.isArray(body?.messages)) {
+    body.messages.forEach((message: any, msgIdx: number) => {
+      recordCacheControl(message, `messages[${msgIdx}]`);
+      if (message && typeof message === 'object') {
+        inspectContentParts(message.content, `messages[${msgIdx}]`);
+      }
+    });
+  }
+
+  const hasExplicit1h = explicit.has('1h');
+  const hasExplicit5m = explicit.has('5m');
+  const ttlMode: CacheTtlMode = hasExplicit1h && (hasExplicit5m || sawEphemeralWithoutTtl)
+    ? 'mixed'
+    : hasExplicit1h
+      ? 'ephemeral_1h'
+      : 'ephemeral_5m';
+
+  return {
+    ttlMode,
+    explicitTtls: Array.from(explicit),
+    sawEphemeralWithoutTtl,
+    sawCacheControl,
+    sources,
+  };
+}
+
 /**
  * Validates OpenAI format messages to ensure complete tool_calls/tool message pairing.
  * Requires tool messages to immediately follow assistant messages with tool_calls.
@@ -173,6 +282,7 @@ function mapAnthropicImageToOpenAIImageUrl(contentPart: any): any {
 
 export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
   const { model, messages, system = [], temperature, tools, stream, thinking } = body as any;
+  const cacheMetadata = collectCacheControlMetadata(body);
 
   const openAIMessages = Array.isArray(messages)
     ? messages.flatMap((anthropicMessage) => {
@@ -403,5 +513,12 @@ export function formatAnthropicToOpenAI(body: MessageCreateParamsBase): any {
           }
       }
   }
+
+  Object.defineProperty(data, '__ccrouter', {
+    value: { cacheMetadata },
+    enumerable: false,
+    configurable: true,
+  });
+
   return data;
 }

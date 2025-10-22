@@ -1,49 +1,13 @@
-import { calculateCacheCreationTokens, getCachedModelPricing, getModelPricing } from './pricingUtils';
+import type { CacheControlMetadata } from './formatRequest';
+import { computeUsageMetrics, type UpstreamUsage } from './usageUtils';
 
-async function calculateStreamUsage(
-  totalInputTokens: number,
-  totalOutputTokens: number,
-  totalCacheReadTokens: number,
-  actualCost: number | null,
+export function streamOpenAIToAnthropic(
+  openaiStream: ReadableStream,
   model: string,
-  totalReasoningTokens: number
-) {
-  let cacheCreationTokens = 0;
-
-  if (actualCost && actualCost > 0) {
-    let pricing = getCachedModelPricing(model);
-    
-    // If no cached pricing, fetch it now
-    if (!pricing) {
-      try {
-        pricing = await getModelPricing(model);
-      } catch (error) {
-        console.error('Failed to fetch pricing for model:', model, error);
-      }
-    }
-    
-    if (pricing) {
-      cacheCreationTokens = calculateCacheCreationTokens(
-        actualCost,
-        totalInputTokens,
-        // Treat reasoning tokens as output tokens for cost math
-        totalOutputTokens + (totalReasoningTokens || 0),
-        totalCacheReadTokens,
-        pricing
-      );
-    }
+  options?: {
+    cacheMetadata?: CacheControlMetadata;
   }
-
-  return {
-    input_tokens: totalInputTokens - totalCacheReadTokens, // Exclude cache read tokens from input
-    output_tokens: totalOutputTokens,
-    reasoning_tokens: totalReasoningTokens || 0,
-    cache_creation_input_tokens: cacheCreationTokens,
-    cache_read_input_tokens: totalCacheReadTokens
-  };
-}
-
-export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: string): ReadableStream {
+): ReadableStream {
   const messageId = "msg_" + Date.now();
 
   const enqueueSSE = (controller: ReadableStreamDefaultController, eventType: string, data: any) => {
@@ -56,6 +20,7 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
   let totalReasoningTokens = 0;
   let totalCacheReadTokens = 0;
   let actualCost: number | null = null;
+  let latestUsage: any = null;
 
   return new ReadableStream({
     async start(controller) {
@@ -70,7 +35,6 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
           model,
           stop_reason: null,
           stop_sequence: null,
-          usage: { input_tokens: 0, output_tokens: 0 },
         },
       };
       enqueueSSE(controller, "message_start", messageStart);
@@ -107,11 +71,14 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
                     }
                     // Extract usage information if available
                     if (parsed.usage) {
-                      totalInputTokens = parsed.usage.prompt_tokens || totalInputTokens;
-                      totalOutputTokens = parsed.usage.completion_tokens || totalOutputTokens;
-                      totalReasoningTokens = parsed.usage.reasoning_tokens || totalReasoningTokens;
-                      totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens || totalCacheReadTokens;
-                      if (parsed.usage.cost !== undefined) actualCost = parsed.usage.cost;
+                      latestUsage = parsed.usage;
+                      totalInputTokens = parsed.usage.prompt_tokens ?? totalInputTokens;
+                      totalOutputTokens = parsed.usage.completion_tokens ?? totalOutputTokens;
+                      totalReasoningTokens = parsed.usage.reasoning_tokens ?? totalReasoningTokens;
+                      totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens ?? totalCacheReadTokens;
+                      if (parsed.usage.cost !== undefined && parsed.usage.cost !== null) {
+                        actualCost = parsed.usage.cost;
+                      }
                     }
                   } catch (e) {
                     // Parse error
@@ -143,11 +110,14 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
 
                 // Extract usage information if available
                 if (parsed.usage) {
-                  totalInputTokens = parsed.usage.prompt_tokens || totalInputTokens;
-                  totalOutputTokens = parsed.usage.completion_tokens || totalOutputTokens;
-                  totalReasoningTokens = parsed.usage.reasoning_tokens || totalReasoningTokens;
-                  totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens || totalCacheReadTokens;
-                  if (parsed.usage.cost !== undefined) actualCost = parsed.usage.cost;
+                  latestUsage = parsed.usage;
+                  totalInputTokens = parsed.usage.prompt_tokens ?? totalInputTokens;
+                  totalOutputTokens = parsed.usage.completion_tokens ?? totalOutputTokens;
+                  totalReasoningTokens = parsed.usage.reasoning_tokens ?? totalReasoningTokens;
+                  totalCacheReadTokens = parsed.usage.prompt_tokens_details?.cached_tokens ?? totalCacheReadTokens;
+                  if (parsed.usage.cost !== undefined && parsed.usage.cost !== null) {
+                    actualCost = parsed.usage.cost;
+                  }
                 }
 
                 if (!delta) continue;
@@ -390,20 +360,31 @@ export function streamOpenAIToAnthropic(openaiStream: ReadableStream, model: str
       }
 
       // Send message_delta and message_stop
+      const fallbackUsage: UpstreamUsage = {
+        prompt_tokens: totalInputTokens,
+        completion_tokens: totalOutputTokens,
+        reasoning_tokens: totalReasoningTokens,
+        prompt_tokens_details: {
+          cached_tokens: totalCacheReadTokens,
+        },
+      };
+      if (actualCost !== null) {
+        fallbackUsage.cost = actualCost;
+      }
+
+      const billing = await computeUsageMetrics({
+        usage: latestUsage ?? fallbackUsage,
+        model,
+        cacheMetadata: options?.cacheMetadata,
+      });
+
       enqueueSSE(controller, "message_delta", {
         type: "message_delta",
         delta: {
           stop_reason: isToolUse ? "tool_use" : "end_turn",
           stop_sequence: null,
         },
-        usage: await calculateStreamUsage(
-          totalInputTokens,
-          totalOutputTokens,
-          totalCacheReadTokens,
-          actualCost,
-          model,
-          totalReasoningTokens
-        ),
+        usage: billing.usage,
       });
 
       enqueueSSE(controller, "message_stop", {

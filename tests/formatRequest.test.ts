@@ -120,4 +120,42 @@ export async function runFormatRequestTests() {
     assert.equal(typeof userMsg.content, 'string');
     assert.equal(userMsg.content, 'hello');
   }
+
+  // TTL metadata defaults to 5m when unspecified
+  {
+    const req = baseRequest();
+    const out = formatAnthropicToOpenAI(req as any);
+    const meta = (out as any).__ccrouter;
+    assert.ok(meta?.cacheMetadata, 'cache metadata should be attached');
+    assert.equal(meta.cacheMetadata.ttlMode, 'ephemeral_5m');
+  }
+
+  // TTL metadata detects 1h requests
+  {
+    const req = baseRequest();
+    req.messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral', ttl: '1h' } }],
+    });
+    const out = formatAnthropicToOpenAI(req as any);
+    const meta = (out as any).__ccrouter;
+    assert.equal(meta.cacheMetadata.ttlMode, 'ephemeral_1h');
+    assert.deepEqual(meta.cacheMetadata.explicitTtls, ['1h']);
+  }
+
+  // Mixed TTL metadata detection
+  {
+    const req = baseRequest();
+    req.messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'segment-a', cache_control: { type: 'ephemeral', ttl: '1h' } },
+        { type: 'text', text: 'segment-b', cache_control: { type: 'ephemeral' } },
+      ],
+    });
+    const out = formatAnthropicToOpenAI(req as any);
+    const meta = (out as any).__ccrouter;
+    assert.equal(meta.cacheMetadata.ttlMode, 'mixed');
+    assert.ok(meta.cacheMetadata.sources.length >= 2);
+  }
 }

@@ -1,67 +1,14 @@
-import { calculateCacheCreationTokens, getCachedModelPricing, getModelPricing } from './pricingUtils';
+import type { CacheControlMetadata } from './formatRequest';
+import { computeUsageMetrics } from './usageUtils';
 
-async function calculateUsageWithCacheCreation(usage: any, model: string) {
-  const inputTokens = usage?.prompt_tokens || 0;
-  const outputTokens = usage?.completion_tokens || 0;
-  const reasoningTokens = usage?.reasoning_tokens || 0;
-  const cacheReadTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
-  const actualCost = usage?.cost;
-  
-  let cacheCreationTokens = 0;
-  
-  // Usage info for response headers (for transparency)
-  const debugInfo: any = {
-    actualCost,
-    inputTokens,
-    outputTokens,
-    reasoningTokens,
-    cacheReadTokens,
-    model
-  };
-  
-  // If we have actual cost information, try to calculate cache creation tokens
-  if (actualCost && actualCost > 0) {
-    let pricing = getCachedModelPricing(model);
-    debugInfo.pricingFromCache = !!pricing;
-    
-    // If no cached pricing, fetch it now
-    if (!pricing) {
-      try {
-        pricing = await getModelPricing(model);
-        debugInfo.pricingFromCache = false;
-      } catch (error) {
-        console.error('Failed to fetch pricing for model:', model, error);
-      }
-    }
-    
-    debugInfo.pricing = pricing;
-    
-    if (pricing) {
-      cacheCreationTokens = calculateCacheCreationTokens(
-        actualCost,
-        inputTokens,
-        // Treat reasoning tokens as output tokens for cost math
-        outputTokens + reasoningTokens,
-        cacheReadTokens,
-        pricing
-      );
-      debugInfo.cacheCreationTokens = cacheCreationTokens;
-    }
+export async function formatOpenAIToAnthropic(
+  completion: any,
+  model: string,
+  options?: {
+    cacheMetadata?: CacheControlMetadata;
+    mode?: 'anthropic' | 'openrouter';
   }
-  
-  // Store usage info globally for response headers
-  (globalThis as any).debugInfo = debugInfo;
-  
-  return {
-    input_tokens: inputTokens - cacheReadTokens - cacheCreationTokens, // Exclude cache tokens from input
-    output_tokens: outputTokens,
-    reasoning_tokens: reasoningTokens,
-    cache_creation_input_tokens: cacheCreationTokens,
-    cache_read_input_tokens: cacheReadTokens
-  };
-}
-
-export async function formatOpenAIToAnthropic(completion: any, model: string): Promise<any> {
+): Promise<any> {
   const messageId = "msg_" + Date.now();
 
   let content: any = [];
@@ -133,6 +80,12 @@ export async function formatOpenAIToAnthropic(completion: any, model: string): P
     content.push(...toolUses);
   }
 
+  const billing = await computeUsageMetrics({
+    usage: completion.usage,
+    model,
+    cacheMetadata: options?.cacheMetadata,
+  });
+
   const result = {
     id: messageId,
     type: "message",
@@ -141,10 +94,17 @@ export async function formatOpenAIToAnthropic(completion: any, model: string): P
     stop_reason: completion.choices[0].finish_reason === 'tool_calls' ? "tool_use" : "end_turn",
     stop_sequence: null,
     model,
-    usage: await calculateUsageWithCacheCreation(
-      completion.usage,
-      model
-    )
+    usage: billing.usage,
   };
+
+  Object.defineProperty(result, '__ccrouterBilling', {
+    value: {
+      ...billing,
+      mode: options?.mode ?? 'openrouter',
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
   return result;
 }
