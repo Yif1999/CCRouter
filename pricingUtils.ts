@@ -1,6 +1,6 @@
 // Utility functions for model pricing and token calculation
 
-interface ModelPricing {
+export interface ModelPricing {
   prompt: string;
   completion: string;
   request: string;
@@ -30,6 +30,10 @@ export function getCachedModelPricing(modelId: string): ModelPricing | null {
     return pricingCache.data[modelId] || null;
   }
   return null;
+}
+
+export function getPricingCacheTimestamp(): number | null {
+  return pricingCache?.timestamp ?? null;
 }
 
 /**
@@ -117,4 +121,11 @@ export async function prefetchModelPricing(): Promise<void> {
   } catch (error) {
     console.error('Failed to prefetch model pricing:', error);
   }
+}
+
+export function __setPricingCacheForTests(data: { [modelId: string]: ModelPricing }, timestamp = Date.now()): void {
+  pricingCache = {
+    data,
+    timestamp,
+  };
 }

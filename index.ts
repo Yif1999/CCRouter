@@ -40,6 +40,9 @@ export default {
     }
     
     if (url.pathname === '/v1/messages' && request.method === 'POST') {
+      const modeParam = url.searchParams.get('mode');
+      const mode = modeParam === 'anthropic' ? 'anthropic' : 'openrouter';
+
       let openaiRequest: any;
       try {
         const anthropicRequest = await request.json();
@@ -51,6 +54,7 @@ export default {
           headers: { 'Content-Type': 'application/json' },
         });
       }
+      const requestMetadata = (openaiRequest as any)?.__ccrouter;
       const bearerToken = request.headers.get("X-Api-Key") || 
         request.headers.get("Authorization")?.replace("Bearer ", "");
 
@@ -75,7 +79,13 @@ export default {
       }
 
       if (openaiRequest.stream) {
-        const anthropicStream = streamOpenAIToAnthropic(openaiResponse.body as ReadableStream, openaiRequest.model);
+        const anthropicStream = streamOpenAIToAnthropic(
+          openaiResponse.body as ReadableStream,
+          openaiRequest.model,
+          {
+            cacheMetadata: requestMetadata?.cacheMetadata,
+          }
+        );
         return new Response(anthropicStream, {
           headers: {
             "Content-Type": "text/event-stream",
@@ -85,17 +95,29 @@ export default {
         });
       } else {
         const openaiData = await openaiResponse.json();
-        const anthropicResponse = await formatOpenAIToAnthropic(openaiData, openaiRequest.model);
-        
-        // Add transparency headers
-        const debugInfo = (globalThis as any).debugInfo;
+        const anthropicResponse = await formatOpenAIToAnthropic(openaiData, openaiRequest.model, {
+          cacheMetadata: requestMetadata?.cacheMetadata,
+          mode,
+        });
+
+        const billing = (anthropicResponse as any)?.__ccrouterBilling;
         const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (debugInfo) {
-          headers["X-CCRouter-Cost"] = String(debugInfo.actualCost || '0');
-          headers["X-CCRouter-Model"] = debugInfo.model;
-          headers["X-CCRouter-Cache-Creation"] = String(debugInfo.cacheCreationTokens || 0);
+
+        if (mode !== 'anthropic' && billing) {
+          headers["X-CCRouter-Tokens-Input"] = String(billing.tokens.input);
+          headers["X-CCRouter-Tokens-Output"] = String(billing.tokens.output);
+          headers["X-CCRouter-Tokens-CacheRead"] = String(billing.tokens.cacheRead);
+          headers["X-CCRouter-Tokens-CacheCreation"] = String(billing.tokens.cacheCreation);
+
+          const formatCost = (value: number) => value.toFixed(6);
+          headers["X-CCRouter-Cost-Input"] = formatCost(billing.costs.input);
+          headers["X-CCRouter-Cost-Output"] = formatCost(billing.costs.output);
+          headers["X-CCRouter-Cost-Read"] = formatCost(billing.costs.read);
+          headers["X-CCRouter-Cost-Write"] = formatCost(billing.costs.write);
+          headers["X-CCRouter-Cost-Total"] = formatCost(billing.costs.total);
+          headers["X-CCRouter-Billing-Debug"] = JSON.stringify(billing.debug);
         }
-        
+
         return new Response(JSON.stringify(anthropicResponse), { headers });
       }
     }
